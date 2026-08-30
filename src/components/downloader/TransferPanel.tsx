@@ -7,7 +7,7 @@ import {
 } from "./types";
 
 interface TransferPanelProps {
-  job?: DownloadJob;
+  job?: DownloadJob | undefined;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
