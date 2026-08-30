@@ -15,18 +15,20 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "YT Downloader — konsola pobierania" },
+      { title: "YT Downloader — pobieranie" },
       {
         name: "description",
         content:
-          "Minimalistyczna, futurystyczna makieta interfejsu aplikacji do pobierania filmów i audio z YouTube.",
+          "Minimalistyczny interfejs do pobierania filmów i audio z YouTube — pole URL, format MP3/MP4, postęp transferu i kolejka zadań.",
       },
-      { property: "og:title", content: "YT Downloader — konsola pobierania" },
+      { property: "og:title", content: "YT Downloader — pobieranie" },
       {
         property: "og:description",
         content:
-          "Makieta UI: pole URL, wybór formatu MP3/MP4, telemetria transferu i kolejka zadań.",
+          "Minimalistyczny interfejs do pobierania filmów i audio z YouTube.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: Index,
@@ -98,57 +100,45 @@ function Index() {
   const handleCancel = () => {};
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-background">
-      <div className="grid-field pointer-events-none absolute inset-0" aria-hidden />
-      <div
-        className="pointer-events-none absolute -top-40 left-1/2 h-[28rem] w-[42rem] -translate-x-1/2 rounded-full opacity-20 blur-[120px]"
-        style={{ background: "var(--gradient-aurora)" }}
-        aria-hidden
-      />
-
-      <div className="relative mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-6 py-14">
-        <header className="flex items-end justify-between gap-4">
-          <div>
-            <p className="label-mono">v2.0 · makieta interfejsu</p>
-            <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight">
-              YT <span className="text-aurora">Downloader</span>
-            </h1>
-          </div>
-          <div className="text-right">
-            <span className="label-mono block">Katalog</span>
-            <span className="font-mono text-xs text-muted-foreground">~/Downloads</span>
-          </div>
+    <main className="min-h-screen bg-background">
+      <div className="mx-auto flex min-h-screen max-w-xl flex-col px-6 py-16 sm:py-24">
+        <header className="mb-16 flex items-baseline justify-between">
+          <h1 className="font-display text-lg font-medium tracking-tight">
+            YT Downloader
+          </h1>
+          <span className="font-mono text-[11px] text-muted-foreground">
+            ~/Downloads
+          </span>
         </header>
 
-        <section className="panel space-y-7 rounded-xl p-6 sm:p-8">
+        <div className="space-y-12">
           <UrlField
             value={url}
             onChange={setUrl}
             state={urlState}
             hint="watch · shorts · playlist"
           />
+
           <FormatSelect
             format={format}
             quality={quality}
             onFormatChange={handleFormatChange}
             onQualityChange={setQuality}
           />
-          <TransferPanel job={activeJob} />
+
           <DownloadButton
             busy={Boolean(activeJob)}
             disabled={urlState === "invalid"}
             onStart={handleStart}
             onCancel={handleCancel}
           />
-        </section>
 
-        <QueueList jobs={MOCK_JOBS} />
+          <TransferPanel job={activeJob} />
+        </div>
 
-        <footer className="mt-auto pt-4">
-          <p className="font-mono text-[11px] text-muted-foreground">
-            Makieta prezentacyjna — logika opisana w docs/CLAUDE_IMPLEMENTATION.md
-          </p>
-        </footer>
+        <div className="mt-16">
+          <QueueList jobs={MOCK_JOBS} />
+        </div>
       </div>
     </main>
   );

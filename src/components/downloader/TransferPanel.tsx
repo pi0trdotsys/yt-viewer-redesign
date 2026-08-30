@@ -21,54 +21,44 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 export function TransferPanel({ job }: TransferPanelProps) {
   const progress = job?.progress ?? 0;
-  const active = job?.status === "downloading" || job?.status === "converting";
 
   return (
-    <div className="space-y-4 rounded-lg border border-border bg-surface-2/40 p-5">
-      <div className="flex items-center justify-between">
-        <span className="label-mono">Transfer</span>
+    <div className="space-y-5 border-t border-border pt-8">
+      <div className="flex items-baseline justify-between">
+        <span className="font-display text-5xl font-light tabular-nums tracking-tight">
+          {progress.toFixed(1)}
+          <span className="text-2xl text-muted-foreground">%</span>
+        </span>
         <span
           className={`font-mono text-[11px] tracking-[0.18em] uppercase ${
-            job?.status === "error" ? "text-destructive" : "text-primary"
+            job?.status === "error" ? "text-destructive" : "text-muted-foreground"
           }`}
         >
           {STATUS_LABEL[job?.status ?? "idle"]}
         </span>
       </div>
 
-      <div className="flex items-end justify-between gap-4">
-        <span className="font-display text-4xl tabular-nums text-aurora">
-          {progress.toFixed(1)}
-          <span className="text-xl">%</span>
-        </span>
-        <span className="pb-1 font-mono text-[11px] text-muted-foreground">
-          {formatBytes(job?.downloadedBytes)} / {formatBytes(job?.totalBytes)}
-        </span>
-      </div>
-
       <div
-        className={`h-1.5 w-full overflow-hidden rounded-full bg-muted ${active ? "scanline" : ""}`}
+        className="h-px w-full bg-border"
         role="progressbar"
         aria-valuenow={Math.round(progress)}
         aria-valuemin={0}
         aria-valuemax={100}
       >
         <div
-          className="h-full rounded-full transition-[width] duration-500 ease-out"
-          style={{ width: `${progress}%`, background: "var(--gradient-aurora)" }}
+          className="h-full bg-primary transition-[width] duration-500 ease-out"
+          style={{ width: `${progress}%` }}
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-4 border-t border-border pt-4">
+      <div className="grid grid-cols-3 gap-4">
+        <Metric label="Pobrano" value={`${formatBytes(job?.downloadedBytes)} / ${formatBytes(job?.totalBytes)}`} />
         <Metric label="Prędkość" value={formatSpeed(job?.speedBytesPerSec)} />
         <Metric label="ETA" value={formatEta(job?.etaSec)} />
-        <Metric label="Format" value={job ? `${job.format} · ${job.quality}` : "—"} />
       </div>
 
       {job?.error ? (
-        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {job.error}
-        </p>
+        <p className="font-mono text-[11px] text-destructive">{job.error}</p>
       ) : null}
     </div>
   );
