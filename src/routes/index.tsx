@@ -97,7 +97,7 @@ function Index() {
 
   // TODO(logika): podpiąć DownloaderEngine — patrz docs/CLAUDE_IMPLEMENTATION.md
   const handleStart = () => {};
-  const handleCancel = () => {};
+  const handleCancel = (_jobId?: string) => {};
 
   return (
     <main className="min-h-screen bg-background">
