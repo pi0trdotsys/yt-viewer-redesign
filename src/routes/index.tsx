@@ -97,7 +97,7 @@ function Index() {
 
   // TODO(logika): podpiąć DownloaderEngine — patrz docs/CLAUDE_IMPLEMENTATION.md
   const handleStart = () => {};
-  const handleCancel = () => {};
+  const handleCancel = (_jobId?: string) => {};
 
   return (
     <main className="min-h-screen bg-background">
@@ -133,11 +133,11 @@ function Index() {
             onCancel={handleCancel}
           />
 
-          <TransferPanel job={activeJob} />
+          <TransferPanel job={activeJob} onCancel={handleCancel} />
         </div>
 
         <div className="mt-16">
-          <QueueList jobs={MOCK_JOBS} />
+          <QueueList jobs={MOCK_JOBS} onCancel={handleCancel} />
         </div>
       </div>
     </main>
