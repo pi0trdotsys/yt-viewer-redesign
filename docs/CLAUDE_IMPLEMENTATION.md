@@ -97,7 +97,7 @@ Wszystkie kolory/efekty są tokenami w `src/styles.css`
 (`--primary` cyan, `--accent` magenta, `--surface`, `--glow-primary`, `--gradient-aurora`).
 **Nie wpisuj kolorów bezpośrednio w komponentach.** Nowy kolor = nowy token.
 
-Typografia: Space Grotesk (nagłówki), DM Sans (tekst), JetBrains Mono (dane techniczne, liczby).
+Typografia: Abril Fatface (nagłówki / display), Cabin (tekst), JetBrains Mono (dane techniczne, liczby).
 Liczby telemetryczne zawsze monospace + `tabular-nums`, żeby nie skakały.
 
 ## 8. Co pozostaje do zrobienia
