@@ -1,24 +1,121 @@
-# YT Viewer Redesign
+<!--
+  future-tech minimal  ·  dark / oklch / aurora
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-->
 
-Pomóż mi zaprojektować future tech fancy minimalism makiety do aplikacji, która już działa i służy do pobierania filmów z YT. Podrzucam kilka bieżących ekranów wymagających przeprojektowania/odświeżenia. Przygotuj makiety w TypeScript oraz dodaj niezbędną dokumentację dla Claude, który będzie implementował logikę
+<!--╔════════════════════════════════════════╗-->
+<!--║  ██╗  ██╗████████╗    ██████╗ ██╗   ██╗  ║-->
+<!--║  ╚██╗██╔╝╚══██╔══╝    ██╔══██╗╚██╗ ██╔╝  ║-->
+<!--║   ╚███╔╝    ██║       ██████╔╝ ╚████╔╝   ║-->
+<!--║  ██╔██╗    ██║       ██╔══██╗  ╚██╔╝    ║-->
+<!--║  ██╔╝ ██╗  ██║       ██████╔╝   ██║     ║-->
+<!--║  ╚═╝  ╚═╝  ╚═╝       ╚═════╝    ╚═╝     ║-->
+<!--║       viewer · downloader · self-host   ║-->
+<!--╚════════════════════════════════════════╝-->
 
-This project was built with [Lovable](https://lovable.dev).
+<div align="center">
 
-## Build with Lovable
+## YT Viewer Redesign
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/972792bf-5c50-4da4-b9f2-4a91b132559b).
+> samodzielna usługa pobierania z YouTube — dark minimal UI + backend na Ubuntu
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+`localhost · 127.0.0.1 · ~/Downloads`
+</div>
 
-## Development
+---
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+## 0. architektura
 
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
 ```
+   ┌──────────────────────────────────────────┐
+   │                      domena               │
+   │              https://yt.twojadomena.pl     │
+   └──────────────┬──────────────────┬───────┘
+                  ▼                  ▼
+            cloudflared        tunel Cloudflare
+                  │                  (Zero Trust)
+   ┌──────────────┴──────────────────┴─────────┐
+   │  app  (port 3000, 127.0.0.1)              │
+   │  ├── Basic Auth                            │
+   │  ├── gateway /api/public/*                 │
+   │  └── proxy ──────────────────────►   worker │
+   │        yt-dlp · ffmpeg (port 8081)        │
+   └──────────────────────────────────────────┘
+       wolumen ./downloads → pobrane pliki
+```
+
+| warstwa     | opis                                              |
+| ----------- | ------------------------------------------------- |
+| **app**     | TanStack Start · SSR · `node-server` · Basic Auth |
+| **gateway** | `/api/public/*` → reverse proxy do workera        |
+| **worker**  | yt-dlp + ffmpeg · Bun · SSE + limity              |
+| **tunel**   | Cloudflare Tunnel → Twoja poddomena               |
+
+---
+
+## 1. lokalnie
+
+```bash
+bun install
+bun run dev          # http://localhost:8080
+```
+
+> `vite dev` proxy `/api/*` do workera, jeśli on jest uruchomiony
+> (`WORKER_URL=http://127.0.0.1:8081` · `WORKER_TOKEN=dev`).
+
+---
+
+## 2. na Ubuntu Server
+
+pełny przewodnik: [`docs/DEPLOY.md`](./docs/DEPLOY.md)
+
+```bash
+git clone https://github.com/pi0trdotsys/yt-viewer-redesign
+cd yt-viewer-redesign
+cp .env.example .env        # AUTH_USER · AUTH_PASSWORD_SHA256 · WORKER_TOKEN · TUNNEL_TOKEN
+docker compose up -d --build
+```
+
+aplikacja pod `127.0.0.1:3000` (chroniona hasłem), pliki w `./downloads/`.
+
+---
+
+## 3. interfejs
+
+- pole — wklej adres YouTube (`watch` · `shorts` · `playlist`)
+- format — `mp3` / `mp4`, jakość 480p → 2160p / 128k → 320k
+- pasek transferu — pobieranie · konwersja · gotowe
+- kolejka — historia w `localStorage`; pobieraj ponownie
+
+---
+
+## 4. bezpieczeństwo
+
+- **Basic Auth** — każde żądanie odpyta przeglądarkę o login + hasło
+- **WORKER_TOKEN** — app → worker, port workera nie publikowany
+- **token joba** — HMAC (SHA-256) chroni SSE i pobieranie pliku
+- **limity** — równoległe zadania, długość playlisty, długość filmu
+- opcjonalnie: **Cloudflare Access** przed domeną
+
+---
+
+## 5. tech
+
+| warstwa  | stack                                         |
+| -------- | --------------------------------------------- |
+| frontend | TanStack Start · React · Tailwind · shadcn/ui |
+| logika   | silnik SSE + polling fallback, zod DTO        |
+| backend  | Nitro (`node-server`) · Bun                   |
+| worker   | yt-dlp · ffmpeg · Bun · Node Streams          |
+| devops   | Docker · docker compose · cloudflared         |
+
+---
+
+<div align="center">
+
+built with ☾ · by <a href="https://pi0tr.dev">piotr</a>
+
+<!-- aurora: primary oklch(0.628 0.258 29.2) -->
+</div>
+</arg_value>
+</write_to_file></tool_call>
