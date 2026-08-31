@@ -25,11 +25,7 @@ export function FormatSelect({
     <div className="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-end">
       <div className="space-y-2">
         <span className="label-mono">Format</span>
-        <div
-          role="radiogroup"
-          aria-label="Format pliku"
-          className="grid grid-cols-2 gap-2"
-        >
+        <div role="radiogroup" aria-label="Format pliku" className="grid grid-cols-2 gap-2">
           {FORMATS.map(({ id, label, sub, Icon }) => {
             const active = format === id;
             return (

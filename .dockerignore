@@ -1,0 +1,12 @@
+node_modules
+.output
+.nitro
+.cache
+downloads
+worker/node_modules
+.git
+.env
+.env.*
+!.env.example
+*.md
+docs

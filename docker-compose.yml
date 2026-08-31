@@ -1,0 +1,54 @@
+name: yt-viewer
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Basic Auth (wymagane w produkcji — server.ts odmawia bez tego)
+      AUTH_USER: ${AUTH_USER:?set AUTH_USER in .env}
+      AUTH_PASSWORD_SHA256: ${AUTH_PASSWORD_SHA256:?set AUTH_PASSWORD_SHA256 in .env}
+      # Gateway → worker
+      WORKER_URL: http://worker:8081
+      WORKER_TOKEN: ${WORKER_TOKEN:?set WORKER_TOKEN in .env}
+    depends_on:
+      worker:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  worker:
+    build: ./worker
+    restart: unless-stopped
+    environment:
+      PORT: 8081
+      WORKER_TOKEN: ${WORKER_TOKEN:?set WORKER_TOKEN in .env}
+      DOWNLOAD_DIR: /data
+      MAX_CONCURRENT_JOBS: ${MAX_CONCURRENT_JOBS:-2}
+      MAX_PLAYLIST_ITEMS: ${MAX_PLAYLIST_ITEMS:-25}
+      MAX_DURATION_SEC: ${MAX_DURATION_SEC:-21600}
+    volumes:
+      - ./downloads:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "await fetch('http://127.0.0.1:8081/health').then(r=>{if(!r.ok)throw 0})",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
+    depends_on:
+      - app

@@ -11,6 +11,8 @@ import {
   type MediaFormat,
   type UrlFieldState,
 } from "@/components/downloader/types";
+import { useDownloader } from "@/lib/downloader/useDownloader";
+import { parseYoutubeUrl } from "@/lib/downloader/validate";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -24,8 +26,7 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "YT Downloader — pobieranie" },
       {
         property: "og:description",
-        content:
-          "Minimalistyczny interfejs do pobierania filmów i audio z YouTube.",
+        content: "Minimalistyczny interfejs do pobierania filmów i audio z YouTube.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -34,81 +35,64 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-/** Dane wyłącznie poglądowe — do podmiany na stan z silnika pobierania. */
-const MOCK_JOBS: DownloadJob[] = [
-  {
-    id: "j1",
-    url: "https://www.youtube.com/watch?v=3k19DtTaTZk",
-    title: "Nocny przejazd przez Tokio — 4K ambient",
-    durationSec: 742,
-    format: "mp4",
-    quality: "1080p",
-    status: "downloading",
-    progress: 39.5,
-    speedBytesPerSec: 6.27 * 1024 * 1024,
-    etaSec: 34.97,
-    downloadedBytes: 148 * 1024 * 1024,
-    totalBytes: 375 * 1024 * 1024,
-  },
-  {
-    id: "j2",
-    url: "https://youtu.be/abc123",
-    title: "Lo-fi set — 2h",
-    durationSec: 7210,
-    format: "mp3",
-    quality: "320kbps",
-    status: "done",
-    progress: 100,
-    outputPath: "~/Downloads/lofi-set.mp3",
-  },
-  {
-    id: "j3",
-    url: "https://youtu.be/xyz789",
-    title: "Materiał niedostępny",
-    format: "mp4",
-    quality: "720p",
-    status: "error",
-    progress: 0,
-    error: "Film niedostępny w Twoim regionie",
-  },
-];
-
 function Index() {
-  const [url, setUrl] = useState("https://www.youtube.com/watch?v=3k19DtTaTZk");
+  const [url, setUrl] = useState("");
   const [format, setFormat] = useState<MediaFormat>("mp4");
   const [quality, setQuality] = useState<string>(DEFAULT_QUALITY.mp4);
+  const { jobs, start, cancel, retry, clearFinished, getDownloadUrl } = useDownloader();
 
-  // Makieta: prosta heurystyka wizualna. Realną walidację dostarcza logika.
+  // Walidacja URL: parser z warstwy logiki (kontrakt §6).
   const urlState: UrlFieldState = useMemo(() => {
     if (url.trim() === "") return "neutral";
-    return /youtube\.com\/(watch|shorts|playlist)|youtu\.be\//.test(url)
-      ? "valid"
-      : "invalid";
+    return parseYoutubeUrl(url) ? "valid" : "invalid";
   }, [url]);
 
-  const activeJob = MOCK_JOBS.find(
-    (j) => j.status === "downloading" || j.status === "converting",
-  );
+  const activeJob = jobs.find((j) => j.status === "downloading" || j.status === "converting");
 
   const handleFormatChange = (next: MediaFormat) => {
     setFormat(next);
     setQuality(DEFAULT_QUALITY[next]);
   };
 
-  // TODO(logika): podpiąć DownloaderEngine — patrz docs/CLAUDE_IMPLEMENTATION.md
-  const handleStart = () => {};
-  const handleCancel = (_jobId?: string) => {};
+  const handleStart = () => {
+    void start({ url: url.trim(), format, quality });
+  };
+
+  const handleCancel = (jobId?: string) => {
+    const target = jobId ?? activeJob?.id;
+    if (target) void cancel(target);
+  };
+
+  const handleRetry = (jobId: string) => {
+    void retry(jobId);
+  };
+
+  const handleReveal = (job: DownloadJob) => {
+    const downloadUrl = getDownloadUrl(job.id);
+    if (!downloadUrl) return;
+    const anchor = document.createElement("a");
+    anchor.href = downloadUrl;
+    anchor.rel = "noopener";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  };
+
+  // Ogłoszenia zmian statusu dla czytników ekranu (kontrakt §12).
+  const announcement = useMemo(() => {
+    const active = jobs.filter(
+      (j) => j.status === "downloading" || j.status === "converting",
+    ).length;
+    const done = jobs.filter((j) => j.status === "done").length;
+    return `Aktywne pobierania: ${active}. Ukończone: ${done}.`;
+  }, [jobs]);
 
   return (
     <main className="min-h-screen bg-background">
       <div className="mx-auto flex min-h-screen max-w-xl flex-col px-6 py-16 sm:py-24">
         <header className="mb-16 flex items-baseline justify-between">
-          <h1 className="font-display text-lg font-medium tracking-tight">
-            YT Downloader
-          </h1>
-          <span className="font-mono text-[11px] text-muted-foreground">
-            ~/Downloads
-          </span>
+          <h1 className="font-display text-lg font-medium tracking-tight">YT Downloader</h1>
+          <span className="font-mono text-[11px] text-muted-foreground">~/Downloads</span>
         </header>
 
         <div className="space-y-12">
@@ -130,14 +114,24 @@ function Index() {
             busy={Boolean(activeJob)}
             disabled={urlState === "invalid"}
             onStart={handleStart}
-            onCancel={handleCancel}
+            onCancel={() => handleCancel()}
           />
 
           <TransferPanel job={activeJob} onCancel={handleCancel} />
         </div>
 
         <div className="mt-16">
-          <QueueList jobs={MOCK_JOBS} onCancel={handleCancel} />
+          <QueueList
+            jobs={jobs}
+            onCancel={handleCancel}
+            onRetry={handleRetry}
+            onReveal={handleReveal}
+            onClearFinished={clearFinished}
+          />
+        </div>
+
+        <div aria-live="polite" className="sr-only">
+          {announcement}
         </div>
       </div>
     </main>

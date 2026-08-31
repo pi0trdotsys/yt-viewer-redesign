@@ -9,13 +9,7 @@ interface UrlFieldProps {
   hint?: string;
 }
 
-export function UrlField({
-  value,
-  onChange,
-  state = "neutral",
-  disabled,
-  hint,
-}: UrlFieldProps) {
+export function UrlField({ value, onChange, state = "neutral", disabled, hint }: UrlFieldProps) {
   const ringClass =
     state === "valid"
       ? "border-primary/60 shadow-[var(--glow-primary)]"
@@ -27,9 +21,7 @@ export function UrlField({
     <div className="space-y-2">
       <div className="flex items-baseline justify-between">
         <span className="label-mono">Źródło</span>
-        {hint ? (
-          <span className="font-mono text-[11px] text-muted-foreground">{hint}</span>
-        ) : null}
+        {hint ? <span className="font-mono text-[11px] text-muted-foreground">{hint}</span> : null}
       </div>
 
       <div

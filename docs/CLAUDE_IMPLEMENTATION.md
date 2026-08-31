@@ -5,15 +5,15 @@ UI jest **prezentacyjne i bezstanowe względem backendu** — cały stan pochodz
 
 ## 1. Zakres makiet
 
-| Plik | Rola |
-| --- | --- |
-| `src/routes/index.tsx` | Ekran główny (Downloader console) — składa całość |
-| `src/components/downloader/UrlField.tsx` | Pole URL + walidacja wizualna |
-| `src/components/downloader/FormatSelect.tsx` | Wybór mp3 / mp4 + jakość |
-| `src/components/downloader/TransferPanel.tsx` | Postęp, prędkość, ETA, rozmiar |
-| `src/components/downloader/QueueList.tsx` | Kolejka / historia zadań |
-| `src/components/downloader/DownloadButton.tsx` | Akcja główna (start/stop) |
-| `src/components/downloader/types.ts` | **Kontrakt typów — źródło prawdy** |
+| Plik                                           | Rola                                              |
+| ---------------------------------------------- | ------------------------------------------------- |
+| `src/routes/index.tsx`                         | Ekran główny (Downloader console) — składa całość |
+| `src/components/downloader/UrlField.tsx`       | Pole URL + walidacja wizualna                     |
+| `src/components/downloader/FormatSelect.tsx`   | Wybór mp3 / mp4 + jakość                          |
+| `src/components/downloader/TransferPanel.tsx`  | Postęp, prędkość, ETA, rozmiar                    |
+| `src/components/downloader/QueueList.tsx`      | Kolejka / historia zadań                          |
+| `src/components/downloader/DownloadButton.tsx` | Akcja główna (start/stop)                         |
+| `src/components/downloader/types.ts`           | **Kontrakt typów — źródło prawdy**                |
 
 ## 2. Kontrakt typów
 
@@ -21,7 +21,8 @@ Zobacz `src/components/downloader/types.ts`. Kluczowe:
 
 ```ts
 type MediaFormat = "mp3" | "mp4";
-type JobStatus = "idle" | "resolving" | "downloading" | "converting" | "done" | "error" | "canceled";
+type JobStatus =
+  "idle" | "resolving" | "downloading" | "converting" | "done" | "error" | "canceled";
 
 interface DownloadJob {
   id: string;
@@ -30,9 +31,9 @@ interface DownloadJob {
   thumbnailUrl?: string;
   durationSec?: number;
   format: MediaFormat;
-  quality: string;          // np. "320kbps" | "1080p"
+  quality: string; // np. "320kbps" | "1080p"
   status: JobStatus;
-  progress: number;         // 0..100
+  progress: number; // 0..100
   speedBytesPerSec?: number;
   etaSec?: number;
   downloadedBytes?: number;
@@ -78,10 +79,10 @@ Logika ma rozpoznawać: `youtube.com/watch?v=`, `youtu.be/`, `youtube.com/shorts
 
 ## 5. Mapowanie jakości
 
-| Format | Dozwolone wartości `quality` |
-| --- | --- |
-| `mp3` | `128kbps`, `192kbps`, `320kbps` |
-| `mp4` | `480p`, `720p`, `1080p`, `1440p`, `2160p` |
+| Format | Dozwolone wartości `quality`              |
+| ------ | ----------------------------------------- |
+| `mp3`  | `128kbps`, `192kbps`, `320kbps`           |
+| `mp4`  | `480p`, `720p`, `1080p`, `1440p`, `2160p` |
 
 Zmiana formatu musi resetować `quality` do wartości domyślnej (`320kbps` / `1080p`).
 

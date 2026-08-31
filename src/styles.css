@@ -63,7 +63,8 @@
   --ring: oklch(0.628 0.258 29.2);
   --grid: oklch(0.3 0 0 / 45%);
   --gradient-aurora: linear-gradient(120deg, var(--primary), oklch(0.52 0.22 15));
-  --glow-primary: 0 0 0 1px color-mix(in oklab, var(--primary) 35%, transparent),
+  --glow-primary:
+    0 0 0 1px color-mix(in oklab, var(--primary) 35%, transparent),
     0 0 32px -8px color-mix(in oklab, var(--primary) 55%, transparent);
   --glow-soft: 0 24px 60px -32px color-mix(in oklab, var(--primary) 45%, transparent);
 }
@@ -89,7 +90,8 @@
 }
 
 @utility grid-field {
-  background-image: linear-gradient(var(--grid) 1px, transparent 1px),
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-size: 48px 48px;
   mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black, transparent 75%);

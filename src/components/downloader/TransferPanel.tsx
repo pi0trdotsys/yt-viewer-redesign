@@ -1,11 +1,5 @@
 import { X } from "lucide-react";
-import {
-  STATUS_LABEL,
-  formatBytes,
-  formatEta,
-  formatSpeed,
-  type DownloadJob,
-} from "./types";
+import { STATUS_LABEL, formatBytes, formatEta, formatSpeed, type DownloadJob } from "./types";
 
 interface TransferPanelProps {
   job?: DownloadJob | undefined;
@@ -71,14 +65,15 @@ export function TransferPanel({ job, onCancel }: TransferPanelProps) {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <Metric label="Pobrano" value={`${formatBytes(job?.downloadedBytes)} / ${formatBytes(job?.totalBytes)}`} />
+        <Metric
+          label="Pobrano"
+          value={`${formatBytes(job?.downloadedBytes)} / ${formatBytes(job?.totalBytes)}`}
+        />
         <Metric label="Prędkość" value={formatSpeed(job?.speedBytesPerSec)} />
         <Metric label="ETA" value={formatEta(job?.etaSec)} />
       </div>
 
-      {job?.error ? (
-        <p className="font-mono text-[11px] text-destructive">{job.error}</p>
-      ) : null}
+      {job?.error ? <p className="font-mono text-[11px] text-destructive">{job.error}</p> : null}
     </div>
   );
 }

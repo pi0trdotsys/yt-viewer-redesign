@@ -1,0 +1,11 @@
+{
+  "name": "ytdl-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0"
+  }
+}

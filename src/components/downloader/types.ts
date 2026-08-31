@@ -1,13 +1,7 @@
 export type MediaFormat = "mp3" | "mp4";
 
 export type JobStatus =
-  | "idle"
-  | "resolving"
-  | "downloading"
-  | "converting"
-  | "done"
-  | "error"
-  | "canceled";
+  "idle" | "resolving" | "downloading" | "converting" | "done" | "error" | "canceled";
 
 export interface DownloadJob {
   id: string;
