@@ -133,11 +133,11 @@ function Index() {
             onCancel={handleCancel}
           />
 
-          <TransferPanel job={activeJob} />
+          <TransferPanel job={activeJob} onCancel={handleCancel} />
         </div>
 
         <div className="mt-16">
-          <QueueList jobs={MOCK_JOBS} />
+          <QueueList jobs={MOCK_JOBS} onCancel={handleCancel} />
         </div>
       </div>
     </main>
