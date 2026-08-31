@@ -261,7 +261,7 @@ Tokeny w `src/styles.css` (paleta YouTube, ciemna baza):
 | `--gradient-aurora`, `--glow-primary`, `--glow-soft` | efekty (używane oszczędnie) |
 | `--radius` `0.25rem` | promień bazowy |
 
-Typografia: `--font-display` Space Grotesk (nagłówki), `--font-sans` DM Sans (tekst), `--font-mono` JetBrains Mono (dane techniczne).
+Typografia: `--font-display` Abril Fatface (nagłówki / display), `--font-sans` Cabin (tekst), `--font-mono` JetBrains Mono (dane techniczne).
 Liczby telemetryczne zawsze `font-mono` + `tabular-nums`.
 Fonty ładowane `<link>` w `src/routes/__root.tsx` — **nigdy** `@import` zdalnego URL w `styles.css`.
 
