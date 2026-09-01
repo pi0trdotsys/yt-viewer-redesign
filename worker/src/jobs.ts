@@ -381,6 +381,13 @@ export class JobManager {
 
   private finish(job: InternalJob, dto: JobDto): void {
     job.dto = dto;
+    if (dto.status === "error") {
+      // Jedyny ślad błędu w `docker compose logs worker` — bez tego
+      // nieudane pobrania są widoczne tylko w UI, nie w logach kontenera.
+      console.error(
+        `[worker] job ${dto.id} failed (${dto.errorCode ?? "UNKNOWN"}) url=${dto.url}: ${dto.error ?? ""}`,
+      );
+    }
     this.emit(dto, true); // terminalne zawsze natychmiast (§4)
   }
 
