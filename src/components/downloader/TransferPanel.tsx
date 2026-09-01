@@ -8,9 +8,9 @@ interface TransferPanelProps {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="space-y-1">
-      <span className="label-mono block">{label}</span>
-      <span className="block truncate font-mono text-xs tabular-nums text-foreground sm:text-sm">
+    <div className="space-y-1.5">
+      <span className="label-mono block text-[10px]">{label}</span>
+      <span className="block truncate font-mono text-xs tabular-nums text-foreground/90 sm:text-sm">
         {value}
       </span>
     </div>
@@ -23,18 +23,31 @@ export function TransferPanel({ job, onCancel }: TransferPanelProps) {
   const indeterminate = job?.status === "resolving";
 
   return (
-    <div className="space-y-5 border-t border-border pt-6 sm:pt-8">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3">
-        <span className="font-display text-4xl font-light tabular-nums tracking-tight transition-opacity duration-300 sm:text-5xl">
+    <div className="glass relative space-y-6 rounded-2xl p-5 sm:p-7">
+      <span aria-hidden className="absolute inset-x-6 top-0 hairline-top opacity-60" />
+
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+        <span className="font-display text-5xl leading-none tabular-nums tracking-tight sm:text-6xl">
           {progress.toFixed(1)}
-          <span className="text-xl text-muted-foreground sm:text-2xl">%</span>
+          <span className="ml-1 font-mono text-lg text-muted-foreground sm:text-xl">%</span>
         </span>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
           <span
-            className={`font-mono text-[11px] tracking-[0.18em] uppercase ${
-              job?.status === "error" ? "text-destructive" : "text-muted-foreground"
+            className={`flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono text-[10px] tracking-[0.2em] uppercase ${
+              job?.status === "error"
+                ? "border-destructive/45 text-destructive"
+                : "border-border/70 text-muted-foreground"
             }`}
           >
+            <span
+              className={`size-1.5 rounded-full ${
+                active || indeterminate
+                  ? "bg-primary [animation:breathe_1.6s_ease-in-out_infinite]"
+                  : job?.status === "error"
+                    ? "bg-destructive"
+                    : "bg-muted-foreground/50"
+              }`}
+            />
             {STATUS_LABEL[job?.status ?? "idle"]}
           </span>
           {active && job ? (
@@ -42,7 +55,7 @@ export function TransferPanel({ job, onCancel }: TransferPanelProps) {
               type="button"
               aria-label="Anuluj pobieranie"
               onClick={() => onCancel?.(job.id)}
-              className="flex items-center gap-1 rounded-sm border border-border px-2 py-1 font-mono text-[10px] tracking-[0.14em] uppercase text-muted-foreground transition-colors hover:border-destructive/60 hover:text-destructive"
+              className="flex items-center gap-1.5 rounded-full border border-border/70 px-3 py-1.5 font-mono text-[10px] tracking-[0.16em] uppercase text-muted-foreground transition-colors duration-300 hover:border-destructive/60 hover:text-destructive"
             >
               <X className="size-3" strokeWidth={1.5} />
               Anuluj
@@ -52,21 +65,23 @@ export function TransferPanel({ job, onCancel }: TransferPanelProps) {
       </div>
 
       <div
-        className={`h-px w-full overflow-hidden bg-border ${indeterminate ? "scanline" : ""}`}
+        className={`h-[3px] w-full overflow-hidden rounded-full bg-border/50 ${
+          indeterminate ? "scanline" : ""
+        }`}
         role="progressbar"
         aria-valuenow={indeterminate ? undefined : Math.round(progress)}
         aria-valuemin={0}
         aria-valuemax={100}
       >
         <div
-          className={`h-full bg-primary transition-[width] duration-500 ease-out ${
-            active ? "animate-pulse" : ""
+          className={`h-full rounded-full bg-linear-to-r from-primary/60 to-primary transition-[width] duration-700 ease-out ${
+            active ? "shimmer" : ""
           }`}
           style={{ width: `${indeterminate ? 0 : progress}%` }}
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-5 border-t border-border/50 pt-5 sm:grid-cols-3">
         <Metric
           label="Pobrano"
           value={`${formatBytes(job?.downloadedBytes)} / ${formatBytes(job?.totalBytes)}`}

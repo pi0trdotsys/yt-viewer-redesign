@@ -88,18 +88,24 @@ function Index() {
   }, [jobs]);
 
   return (
-    <main className="min-h-screen bg-background">
-      <div className="mx-auto flex min-h-screen w-full max-w-xl flex-col px-4 py-10 sm:px-6 sm:py-16 lg:max-w-2xl lg:py-24">
-        <header className="mb-10 grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 sm:mb-16">
-          <h1 className="truncate font-display text-base font-medium tracking-tight sm:text-lg">
-            YT Downloader
-          </h1>
-          <span className="shrink-0 font-mono text-[10px] text-muted-foreground sm:text-[11px]">
+    <main className="relative min-h-screen overflow-hidden bg-background">
+      <div aria-hidden className="grid-field pointer-events-none absolute inset-0 opacity-40" />
+      <div className="halo relative mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center px-4 py-12 sm:px-6 sm:py-16 lg:max-w-2xl">
+        <header className="mb-10 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:mb-14">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-primary/40 bg-primary/10 font-mono text-[11px] tracking-tight text-primary">
+              YT
+            </span>
+            <h1 className="truncate font-display text-lg leading-none tracking-tight sm:text-xl">
+              Downloader
+            </h1>
+          </div>
+          <span className="shrink-0 rounded-full border border-border/60 px-3 py-1 font-mono text-[10px] tracking-[0.14em] text-muted-foreground sm:text-[11px]">
             ~/Downloads
           </span>
         </header>
 
-        <div className="space-y-8 sm:space-y-12">
+        <div className="rise space-y-8 sm:space-y-10">
           <UrlField
             value={url}
             onChange={setUrl}
@@ -122,9 +128,7 @@ function Index() {
           />
 
           <TransferPanel job={activeJob} onCancel={handleCancel} />
-        </div>
 
-        <div className="mt-10 sm:mt-16">
           <QueueList
             jobs={jobs}
             onCancel={handleCancel}
@@ -141,3 +145,4 @@ function Index() {
     </main>
   );
 }
+

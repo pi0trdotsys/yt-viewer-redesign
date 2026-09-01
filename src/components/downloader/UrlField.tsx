@@ -12,28 +12,29 @@ interface UrlFieldProps {
 export function UrlField({ value, onChange, state = "neutral", disabled, hint }: UrlFieldProps) {
   const ringClass =
     state === "valid"
-      ? "border-primary/60 shadow-[var(--glow-primary)]"
+      ? "border-primary/50 shadow-[var(--glow-primary)]"
       : state === "invalid"
-        ? "border-destructive/70"
-        : "border-border focus-within:border-primary/50";
+        ? "border-destructive/60"
+        : "border-border/70 focus-within:border-primary/40";
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-2">
         <span className="label-mono truncate">Źródło</span>
         {hint ? (
-          <span className="shrink-0 truncate font-mono text-[10px] text-muted-foreground sm:text-[11px]">
+          <span className="shrink-0 truncate font-mono text-[10px] tracking-[0.16em] text-muted-foreground/70 sm:text-[11px]">
             {hint}
           </span>
         ) : null}
       </div>
 
       <div
-        className={`flex items-center gap-2 rounded-lg bg-surface-2/60 px-3 py-3 transition-all duration-300 sm:gap-3 sm:px-4 ${ringClass}`}
-        style={{ borderWidth: 1 }}
+        className={`group relative flex items-center gap-3 rounded-xl border bg-surface-2/30 px-4 py-4 transition-all duration-500 ${ringClass}`}
       >
         <Link2
-          className={`size-4 shrink-0 ${state === "invalid" ? "text-destructive" : "text-primary"}`}
+          className={`size-4 shrink-0 transition-colors duration-300 ${
+            state === "invalid" ? "text-destructive" : "text-primary/80"
+          }`}
           strokeWidth={1.5}
         />
         <input
@@ -43,14 +44,20 @@ export function UrlField({ value, onChange, state = "neutral", disabled, hint }:
           spellCheck={false}
           placeholder="https://www.youtube.com/watch?v=..."
           aria-label="Adres URL filmu YouTube"
-          className="w-full min-w-0 bg-transparent font-mono text-[13px] text-foreground outline-none placeholder:text-muted-foreground/60 disabled:opacity-50 sm:text-sm"
+          className="w-full min-w-0 bg-transparent font-mono text-[13px] tracking-tight text-foreground outline-none placeholder:text-muted-foreground/40 disabled:opacity-50 sm:text-sm"
         />
         {state === "valid" ? (
-          <CheckCircle2 className="size-4 shrink-0 text-primary" strokeWidth={1.5} />
+          <CheckCircle2 className="size-4 shrink-0 animate-scale-in text-primary" strokeWidth={1.5} />
         ) : null}
         {state === "invalid" ? (
-          <AlertTriangle className="size-4 shrink-0 text-destructive" strokeWidth={1.5} />
+          <AlertTriangle className="size-4 shrink-0 animate-scale-in text-destructive" strokeWidth={1.5} />
         ) : null}
+        <span
+          aria-hidden
+          className={`pointer-events-none absolute inset-x-4 bottom-0 hairline-top transition-opacity duration-500 ${
+            state === "valid" ? "opacity-100" : "opacity-0"
+          }`}
+        />
       </div>
     </div>
   );

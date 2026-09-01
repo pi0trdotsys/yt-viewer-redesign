@@ -35,15 +35,15 @@ export function QueueList({
 
   return (
     <section className="space-y-4">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="label-mono flex min-w-0 items-center gap-2 truncate transition-colors hover:text-foreground"
+          className="label-mono flex min-w-0 items-center gap-2 truncate transition-colors duration-300 hover:text-foreground"
         >
           <ChevronDown
-            className={`size-3 shrink-0 transition-transform duration-300 ${open ? "" : "-rotate-90"}`}
+            className={`size-3 shrink-0 transition-transform duration-500 ${open ? "" : "-rotate-90"}`}
             strokeWidth={1.5}
           />
           Kolejka · {jobs.length}
@@ -52,29 +52,34 @@ export function QueueList({
         <button
           type="button"
           onClick={onClearFinished}
-          className="shrink-0 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+          className="shrink-0 rounded-full border border-border/60 px-3 py-1 font-mono text-[10px] tracking-[0.14em] uppercase text-muted-foreground transition-colors duration-300 hover:border-foreground/30 hover:text-foreground"
         >
           wyczyść
         </button>
       </div>
 
       <div
-        className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
+        className={`grid transition-[grid-template-rows,opacity] duration-500 ease-out ${
           open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
         }`}
       >
         <div className="overflow-hidden">
           {jobs.length === 0 ? (
-            <p className="py-6 text-xs text-muted-foreground">Kolejka jest pusta.</p>
+            <p className="rounded-xl border border-dashed border-border/60 px-4 py-8 text-center font-mono text-[11px] tracking-[0.14em] uppercase text-muted-foreground/70">
+              Kolejka jest pusta
+            </p>
           ) : (
-            <ul className="divide-y divide-border border-t border-border">
+            <ul className="space-y-2">
               {jobs.map((job) => {
                 const busy = job.status === "downloading" || job.status === "converting";
                 return (
-                  <li key={job.id} className="flex items-center gap-3 py-3">
+                  <li
+                    key={job.id}
+                    className="flex items-center gap-3 rounded-xl border border-border/50 bg-surface-2/20 px-4 py-3 transition-colors duration-300 hover:border-border"
+                  >
                     <span
-                      className={`size-1 shrink-0 rounded-full ${DOT[job.status]} ${
-                        busy ? "animate-pulse" : ""
+                      className={`size-1.5 shrink-0 rounded-full ${DOT[job.status]} ${
+                        busy ? "[animation:breathe_1.6s_ease-in-out_infinite]" : ""
                       }`}
                     />
                     <div className="min-w-0 flex-1">
@@ -85,9 +90,9 @@ export function QueueList({
                         {busy ? ` ${job.progress.toFixed(0)}%` : ""}
                       </p>
                       {busy ? (
-                        <div className="mt-2 h-px w-full bg-border">
+                        <div className="mt-2 h-px w-full overflow-hidden rounded-full bg-border">
                           <div
-                            className="h-full bg-primary transition-[width] duration-500 ease-out"
+                            className="h-full rounded-full bg-primary transition-[width] duration-700 ease-out"
                             style={{ width: `${job.progress}%` }}
                           />
                         </div>
@@ -99,7 +104,7 @@ export function QueueList({
                           type="button"
                           aria-label="Ponów"
                           onClick={() => onRetry?.(job.id)}
-                          className="p-1 text-muted-foreground transition-colors hover:text-foreground"
+                          className="p-1.5 text-muted-foreground transition-colors duration-300 hover:text-foreground"
                         >
                           <RotateCcw className="size-3.5" strokeWidth={1.5} />
                         </button>
@@ -109,7 +114,7 @@ export function QueueList({
                           type="button"
                           aria-label="Anuluj"
                           onClick={() => onCancel?.(job.id)}
-                          className="p-1 text-muted-foreground transition-colors hover:text-destructive"
+                          className="p-1.5 text-muted-foreground transition-colors duration-300 hover:text-destructive"
                         >
                           <X className="size-3.5" strokeWidth={1.5} />
                         </button>
