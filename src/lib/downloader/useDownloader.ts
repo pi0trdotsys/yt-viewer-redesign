@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import type { DownloadJob } from "@/components/downloader/types";
+import type { SessionResponseDto } from "@/lib/auth/types.shared";
 
 import { getDownloaderEngine, type HttpDownloaderEngine } from "./engine";
 import { parseYoutubeUrl } from "./validate";
@@ -10,17 +11,23 @@ import type { StartInput } from "./types.shared";
 /**
  * Hook spinający silnik ze stanem React (kontrakt §2: `useDownloader`).
  *
- * Persystencja (§10): kolejka w `localStorage` (klucz `ytdl.queue.v1`),
- * odczyt wyłącznie w `useEffect` (hydration-safe), walidacja zodem
- * (niezgodne rekordy odrzucane), limit 100 rekordów historii.
+ * Persystencja (§10): kolejka w `localStorage`, klucz per-użytkownik
+ * (`ytdl.queue.v1.<userId>`) — inaczej po zalogowaniu innym kontem w tej
+ * samej przeglądarce widać historię/kolejkę poprzedniego usera. Odczyt
+ * wyłącznie w `useEffect` (hydration-safe), walidacja zodem (niezgodne
+ * rekordy odrzucane), limit 100 rekordów historii.
  */
 
-const STORAGE_KEY = "ytdl.queue.v1";
+const LEGACY_SHARED_KEY = "ytdl.queue.v1";
 const HISTORY_LIMIT = 100;
 
-function loadPersisted(engine: HttpDownloaderEngine): void {
+function storageKey(userId: string): string {
+  return `${LEGACY_SHARED_KEY}.${userId}`;
+}
+
+function loadPersisted(engine: HttpDownloaderEngine, userId: string): void {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(storageKey(userId));
     if (!raw) return;
     const parsed: unknown = JSON.parse(raw);
     engine.importDtos(parsed);
@@ -29,10 +36,10 @@ function loadPersisted(engine: HttpDownloaderEngine): void {
   }
 }
 
-function persist(engine: HttpDownloaderEngine): void {
+function persist(engine: HttpDownloaderEngine, userId: string): void {
   try {
     const dtos = engine.exportDtos().slice(-HISTORY_LIMIT);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(dtos));
+    window.localStorage.setItem(storageKey(userId), JSON.stringify(dtos));
   } catch {
     // brak miejsca / tryb prywatny — persystencja jest best-effort
   }
@@ -42,14 +49,33 @@ export function useDownloader() {
   const engine = useMemo(() => getDownloaderEngine(), []);
   const [jobs, setJobs] = useState<DownloadJob[]>([]);
   const hydratedRef = useRef(false);
+  const userIdRef = useRef<string | null>(null);
 
-  // Hydration-safe odczyt persystencji + synchronizacja z serwerem (§10).
+  // Hydration-safe: najpierw kim jesteśmy (klucz localStorage per-user),
+  // dopiero potem odczyt persystencji + synchronizacja z serwerem (§10).
   useEffect(() => {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
-    loadPersisted(engine);
-    setJobs(engine.snapshot());
-    void engine.syncFromServer();
+
+    // Jednorazowe sprzątanie starego, współdzielonego między kontami klucza
+    // (przed wprowadzeniem izolacji per-user) — nie ma już czytelnika.
+    try {
+      window.localStorage.removeItem(LEGACY_SHARED_KEY);
+    } catch {
+      // ignoruj — best-effort
+    }
+
+    void fetch("/api/auth/session")
+      .then((res) => res.json() as Promise<SessionResponseDto>)
+      .then((data) => {
+        userIdRef.current = data.user?.id ?? null;
+        if (userIdRef.current) loadPersisted(engine, userIdRef.current);
+        setJobs(engine.snapshot());
+        void engine.syncFromServer();
+      })
+      .catch(() => {
+        void engine.syncFromServer();
+      });
   }, [engine]);
 
   // Subskrypcja emisji silnika + persystencja po każdej zmianie.
@@ -62,7 +88,7 @@ export function useDownloader() {
         next[index] = job;
         return next;
       });
-      persist(engine);
+      if (userIdRef.current) persist(engine, userIdRef.current);
     });
     return unsubscribe;
   }, [engine]);
@@ -105,7 +131,7 @@ export function useDownloader() {
     setJobs((prev) =>
       prev.filter((j) => j.status !== "done" && j.status !== "error" && j.status !== "canceled"),
     );
-    persist(engine);
+    if (userIdRef.current) persist(engine, userIdRef.current);
   }, [engine]);
 
   const getDownloadUrl = useCallback(

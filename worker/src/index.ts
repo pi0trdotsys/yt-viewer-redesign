@@ -4,8 +4,8 @@ import { jobStreamToken, verifyBearer, verifyJobToken } from "./tokens";
 /**
  * Worker yt-dlp — osobna usługa HTTP (Model A, kontrakt §1.1).
  *
- * Endpointy (auth: Bearer WORKER_TOKEN; /events i /files dodatkowo/alternatywnie
- * akceptują ?token= — HMAC joba, bo przeglądarka nie ustawia nagłówków):
+ * Endpointy (auth: Bearer WORKER_TOKEN; /events i /files dodatkowo wymagają
+ * ?token= — HMAC joba, bo przeglądarka nie ustawia nagłówków przy EventSource):
  *   GET    /health
  *   POST   /jobs                 {url, format, quality} → {jobs: [...]}
  *   GET    /jobs                 → {jobs: [...]}
@@ -13,6 +13,11 @@ import { jobStreamToken, verifyBearer, verifyJobToken } from "./tokens";
  *   POST   /jobs/:id/retry       → {jobs: [...]}
  *   GET    /jobs/:id/events      → SSE (event: job, heartbeat 15 s, §9)
  *   GET    /files/:id            → strumień pliku (Content-Disposition)
+ *
+ * Izolacja per-user: gateway (jedyny wołający, bo port workera nie jest
+ * publikowany) ustawia nagłówek X-User-Id z id zalogowanego usera po
+ * weryfikacji sesji. Worker filtruje nim list()/get()/cancel()/retry() —
+ * jeden użytkownik nie widzi ani nie steruje zadaniami drugiego.
  */
 
 const PORT = Number(process.env["PORT"] ?? "8081");
@@ -84,7 +89,12 @@ function parseStartInput(body: Record<string, unknown>): {
 }
 
 /** SSE: event: job + heartbeat 15 s; zamknięcie po statusie terminalnym (§9). */
-function jobEventsStream(jobId: string): Response {
+function jobEventsStream(jobId: string, ownerId: string): Response {
+  const current = manager.get(jobId, ownerId);
+  if (!current) {
+    return json({ error: "Not found" }, 404);
+  }
+
   const encoder = new TextEncoder();
   let cleanup: (() => void) | undefined;
 
@@ -98,9 +108,8 @@ function jobEventsStream(jobId: string): Response {
         }
       };
 
-      const current = manager.get(jobId);
-      if (current) send(current);
-      if (current && ["done", "error", "canceled"].includes(current.status)) {
+      send(current);
+      if (["done", "error", "canceled"].includes(current.status)) {
         controller.close();
         return;
       }
@@ -155,13 +164,13 @@ function sanitizeFilename(name: string): string {
 async function fileResponse(
   jobId: string,
   token: string | null,
-  bearerOk: boolean,
+  ownerId: string,
 ): Promise<Response> {
-  const dto = manager.get(jobId);
+  const dto = manager.get(jobId, ownerId);
   if (!dto || dto.status !== "done") {
     return json({ error: "Plik nie jest dostępny" }, 404);
   }
-  if (!verifyJobToken(jobId, token, SECRET) && !bearerOk) {
+  if (!verifyJobToken(jobId, token, SECRET)) {
     return json({ error: "Invalid token" }, 403);
   }
   const path = await manager.resolveFilePath(jobId);
@@ -190,38 +199,42 @@ Bun.serve({
       return json({ ok: true });
     }
 
-    const bearerOk = authorized(request);
-    if (!bearerOk) {
+    if (!authorized(request)) {
       return json({ error: "Unauthorized" }, 401);
     }
+
+    // Kto woła — nagłówek ustawiany przez gateway po weryfikacji sesji
+    // (kontrakt: docs/CLAUDE_CONTRACT.md, izolacja per-user). Pusty ownerId
+    // po prostu nie dopasuje żadnego realnego joba (fail-closed).
+    const ownerId = (request.headers.get("x-user-id") ?? "").trim().slice(0, 128);
 
     try {
       if (path === "/jobs" && request.method === "POST") {
         const input = parseStartInput(await readJson(request));
-        const jobs = manager.create(input);
+        const jobs = manager.create(input, ownerId);
         return json({ jobs: jobs.map(withStreamToken) });
       }
 
       if (path === "/jobs" && request.method === "GET") {
-        return json({ jobs: manager.list().map(withStreamToken) });
+        return json({ jobs: manager.list(ownerId).map(withStreamToken) });
       }
 
       const jobMatch = /^\/jobs\/([0-9a-fA-F-]{36})$/.exec(path);
       if (jobMatch) {
         const jobId = jobMatch[1]!;
         if (request.method === "DELETE") {
-          manager.cancel(jobId);
+          manager.cancel(jobId, ownerId);
           return json({ ok: true });
         }
         if (request.method === "GET") {
-          const dto = manager.get(jobId);
+          const dto = manager.get(jobId, ownerId);
           return dto ? json({ job: withStreamToken(dto) }) : json({ error: "Not found" }, 404);
         }
       }
 
       const retryMatch = /^\/jobs\/([0-9a-fA-F-]{36})\/retry$/.exec(path);
       if (retryMatch && request.method === "POST") {
-        const jobs = manager.retry(retryMatch[1]!);
+        const jobs = manager.retry(retryMatch[1]!, ownerId);
         return json({ jobs: jobs.map(withStreamToken) });
       }
 
@@ -232,12 +245,12 @@ Bun.serve({
         if (!verifyJobToken(jobId, token, SECRET)) {
           return json({ error: "Invalid token" }, 403);
         }
-        return jobEventsStream(jobId);
+        return jobEventsStream(jobId, ownerId);
       }
 
       const fileMatch = /^\/files\/([0-9a-fA-F-]{36})$/.exec(path);
       if (fileMatch && request.method === "GET") {
-        return await fileResponse(fileMatch[1]!, url.searchParams.get("token"), bearerOk);
+        return await fileResponse(fileMatch[1]!, url.searchParams.get("token"), ownerId);
       }
 
       return json({ error: "Not found" }, 404);

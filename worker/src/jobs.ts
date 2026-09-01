@@ -57,6 +57,9 @@ const MAX_TERMINAL_JOBS = 200;
 interface InternalJob {
   dto: JobDto;
   input: { url: string; format: "mp3" | "mp4"; quality: string };
+  /** Kto utworzył zadanie (z nagłówka X-User-Id, ustawianego przez gateway po
+   *  weryfikacji sesji) — izoluje kolejkę/historię między kontami. */
+  ownerId: string;
   process?: SpawnedProcess;
   canceled: boolean;
   lastEmitAt: number;
@@ -82,7 +85,10 @@ export class JobManager {
 
   // --- API ------------------------------------------------------------------
 
-  create(input: { url: string; format: "mp3" | "mp4"; quality: string }): JobDto[] {
+  create(
+    input: { url: string; format: "mp3" | "mp4"; quality: string },
+    ownerId: string,
+  ): JobDto[] {
     const activeCount = [...this.jobs.values()].filter(
       (job) => !TERMINAL.includes(job.dto.status),
     ).length;
@@ -92,7 +98,7 @@ export class JobManager {
       });
     }
 
-    const job = this.newJob(input);
+    const job = this.newJob(input, ownerId);
     this.jobs.set(job.dto.id, job);
     this.queue.push(job.dto.id);
     this.pump();
@@ -100,9 +106,11 @@ export class JobManager {
     return [job.dto];
   }
 
-  cancel(jobId: string): void {
+  /** Anulowanie jest no-opem dla nieistniejącego/cudzego joba — nie zdradzamy
+   *  czy w ogóle istnieje (izolacja per-user). */
+  cancel(jobId: string, ownerId: string): void {
     const job = this.jobs.get(jobId);
-    if (!job || TERMINAL.includes(job.dto.status)) return; // idempotentne (§4)
+    if (!job || job.ownerId !== ownerId || TERMINAL.includes(job.dto.status)) return; // idempotentne (§4)
     job.canceled = true;
     if (job.process) {
       job.process.kill();
@@ -112,23 +120,26 @@ export class JobManager {
     }
   }
 
-  retry(jobId: string): JobDto[] {
+  retry(jobId: string, ownerId: string): JobDto[] {
     const job = this.jobs.get(jobId);
-    if (!job) throw Object.assign(new Error("Nie znaleziono zadania"), { statusCode: 404 });
+    if (!job || job.ownerId !== ownerId) {
+      throw Object.assign(new Error("Nie znaleziono zadania"), { statusCode: 404 });
+    }
     if (job.dto.status !== "error" && job.dto.status !== "canceled") {
       throw Object.assign(new Error("Ponowić można wyłącznie zadania zakończone błędem"), {
         statusCode: 409,
       });
     }
-    return this.create(job.input);
+    return this.create(job.input, ownerId);
   }
 
-  list(): JobDto[] {
-    return [...this.jobs.values()].map((job) => job.dto);
+  list(ownerId: string): JobDto[] {
+    return [...this.jobs.values()].filter((job) => job.ownerId === ownerId).map((job) => job.dto);
   }
 
-  get(jobId: string): JobDto | undefined {
-    return this.jobs.get(jobId)?.dto;
+  get(jobId: string, ownerId: string): JobDto | undefined {
+    const job = this.jobs.get(jobId);
+    return job && job.ownerId === ownerId ? job.dto : undefined;
   }
 
   subscribe(jobId: string, cb: (dto: JobDto) => void): () => void {
@@ -159,7 +170,10 @@ export class JobManager {
 
   // --- maszyna stanów -------------------------------------------------------
 
-  private newJob(input: { url: string; format: "mp3" | "mp4"; quality: string }): InternalJob {
+  private newJob(
+    input: { url: string; format: "mp3" | "mp4"; quality: string },
+    ownerId: string,
+  ): InternalJob {
     const dto: JobDto = {
       id: randomUUID(),
       url: input.url,
@@ -168,7 +182,15 @@ export class JobManager {
       status: "idle",
       progress: 0,
     };
-    return { dto, input, canceled: false, lastEmitAt: 0, pendingTimer: null, pendingDto: null };
+    return {
+      dto,
+      input,
+      ownerId,
+      canceled: false,
+      lastEmitAt: 0,
+      pendingTimer: null,
+      pendingDto: null,
+    };
   }
 
   private pump(): void {
@@ -220,7 +242,7 @@ export class JobManager {
         throw new Error("Playlista jest pusta lub niedostępna");
       }
       for (const entryUrl of entries.slice(1)) {
-        const child = this.newJob({ ...job.input, url: entryUrl });
+        const child = this.newJob({ ...job.input, url: entryUrl }, job.ownerId);
         this.jobs.set(child.dto.id, child);
         this.queue.push(child.dto.id);
         this.emit(child.dto);

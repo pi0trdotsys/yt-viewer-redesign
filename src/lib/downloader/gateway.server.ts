@@ -11,6 +11,9 @@ import { getSessionUser } from "../auth/session.server";
  * - autoryzacja żądań: sesja logowania (ciasteczko, `getSessionUser`) —
  *   sprawdzana tu, żeby działać identycznie w dev i produkcji. Token joba
  *   (`streamToken`) dodatkowo weryfikuje worker na endpointach /events i /files.
+ * - izolacja per-user: id zalogowanego usera przekazywany do workera w
+ *   nagłówku X-User-Id — worker filtruje nim listę/anulowanie/retry jobów,
+ *   żeby jeden użytkownik nie widział ani nie sterował zadaniami drugiego.
  */
 
 const PUBLIC_PREFIX = "/api/public/";
@@ -25,14 +28,18 @@ function workerPath(request: Request): string {
   return url.pathname.slice(PUBLIC_PREFIX.length - 1) + url.search;
 }
 
-async function forwardToWorker(request: Request, pathWithQuery: string): Promise<Response> {
+async function forwardToWorker(
+  request: Request,
+  pathWithQuery: string,
+  ownerId: string,
+): Promise<Response> {
   const token = process.env["WORKER_TOKEN"] ?? "";
   if (!token) {
     console.error("[gateway] WORKER_TOKEN is not set — refusing to proxy.");
     return Response.json({ error: "WORKER_NOT_CONFIGURED" }, { status: 503 });
   }
 
-  const headers = new Headers({ authorization: `Bearer ${token}` });
+  const headers = new Headers({ authorization: `Bearer ${token}`, "x-user-id": ownerId });
   const contentType = request.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
 
@@ -67,9 +74,10 @@ export async function handleDownloaderApi(request: Request): Promise<Response | 
 
   if (!pathname.startsWith(PUBLIC_PREFIX)) return null;
 
-  if (getSessionUser(request) === null) {
+  const user = getSessionUser(request);
+  if (user === null) {
     return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
-  return forwardToWorker(request, workerPath(request));
+  return forwardToWorker(request, workerPath(request), user.id);
 }
