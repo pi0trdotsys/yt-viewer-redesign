@@ -79,7 +79,14 @@ hasła — aplikację.
 ```sh
 git pull
 docker compose up -d --build
+docker compose restart cloudflared
 ```
+
+Restart `cloudflared` na końcu jest istotny: `--build` podmienia kontener `app`
+na nowy (nowy adres IP w sieci Dockera), a długo działający `cloudflared`
+czasem zostaje z nieaktualnym wpisem w DNS Dockera i przestaje trafiać pod
+`http://app:3000` (`dial tcp: lookup app on 127.0.0.11:53: server misbehaving`
+w `docker compose logs cloudflared`). Restart każe mu rozwiązać `app` na nowo.
 
 ## 7. Diagnostyka
 
