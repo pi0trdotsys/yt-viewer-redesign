@@ -120,6 +120,11 @@ bun run dev          # aplikacja na :8080; gateway /api/public/* działa w dev
 cd worker && bun install && WORKER_TOKEN=dev bun run src/index.ts   # worker :8081
 ```
 
+Poza Dockerem worker potrzebuje na hoście `yt-dlp`, `ffmpeg` **i `deno`**
+(`brew install yt-dlp ffmpeg deno` na macOS) — yt-dlp używa deno automatycznie
+do deszyfrowania sygnatur YouTube; bez tego pobieranie kończy się
+`HTTP Error 403: Forbidden`. W obrazie Dockera workera jest to już wbudowane.
+
 W dev ustaw `WORKER_URL=http://127.0.0.1:8081` i `WORKER_TOKEN=dev` dla procesu
 dev serwera (np. w `.env.local` — Vite wczyta automatycznie). Żeby przetestować
 ekran logowania lokalnie, dopisz też `SESSION_SECRET` oraz co najmniej jedno

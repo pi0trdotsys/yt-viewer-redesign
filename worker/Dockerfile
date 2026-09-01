@@ -1,12 +1,21 @@
-# Worker yt-dlp: Bun (usługa HTTP) + ffmpeg + yt-dlp (standalone binary).
+# Worker yt-dlp: Bun (usługa HTTP) + ffmpeg + yt-dlp (standalone binary) + deno.
+# YouTube wymaga teraz wykonania JS przy deszyfrowaniu sygnatur (n-param);
+# bez obsługiwanego runtime'u JS yt-dlp dostaje "HTTP Error 403: Forbidden"
+# (yt-dlp używa deno automatycznie, jeśli jest w $PATH — bez dodatkowych flag).
 FROM oven/bun:1-slim
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl \
+ && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl unzip \
  && curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux \
       -o /usr/local/bin/yt-dlp \
  && chmod +x /usr/local/bin/yt-dlp \
- && apt-get purge -y curl \
+ && DENO_ARCH="$(dpkg --print-architecture | sed -e 's/amd64/x86_64/' -e 's/arm64/aarch64/')" \
+ && curl -fsSL "https://github.com/denoland/deno/releases/latest/download/deno-${DENO_ARCH}-unknown-linux-gnu.zip" \
+      -o /tmp/deno.zip \
+ && unzip -q -o /tmp/deno.zip -d /usr/local/bin \
+ && chmod +x /usr/local/bin/deno \
+ && rm /tmp/deno.zip \
+ && apt-get purge -y curl unzip \
  && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/*
 
