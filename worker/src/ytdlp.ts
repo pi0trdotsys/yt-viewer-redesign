@@ -219,15 +219,18 @@ export function spawnYtdl(args: string[]): SpawnedProcess {
         for (const handler of lineHandlers) handler(line, kind);
         index = pending.indexOf("\n");
       }
-      // yt-dlp używa \r dla postępu bez --newline; z --newline to rzadkie, ale
-      // obsłużymy resztkę bufora przy zamknięciu strumienia.
-      stream.on("end", () => {
-        if (pending.trim() !== "") {
-          if (kind === "err") stderrTail = (stderrTail + "\n" + pending).slice(-8000);
-          for (const handler of lineHandlers) handler(pending, kind);
-          pending = "";
-        }
-      });
+    });
+    // yt-dlp używa \r dla postępu bez --newline; z --newline to rzadkie, ale
+    // obsłużymy resztkę bufora przy zamknięciu strumienia. Rejestrowane raz
+    // na strumień (poza "data") — inaczej każdy chunk dopinał kolejny
+    // listener "end" (MaxListenersExceededWarning / wyciek pamięci przy
+    // dłuższych pobraniach).
+    stream.on("end", () => {
+      if (pending.trim() !== "") {
+        if (kind === "err") stderrTail = (stderrTail + "\n" + pending).slice(-8000);
+        for (const handler of lineHandlers) handler(pending, kind);
+        pending = "";
+      }
     });
   };
 
