@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, RotateCcw, X } from "lucide-react";
+import { ArrowDownToLine, ChevronDown, RotateCcw, X } from "lucide-react";
 import { STATUS_LABEL, formatDuration, type DownloadJob } from "./types";
 
 interface QueueListProps {
@@ -26,6 +26,7 @@ export function QueueList({
   defaultOpen = true,
   onCancel,
   onRetry,
+  onReveal,
   onClearFinished,
 }: QueueListProps) {
   const [open, setOpen] = useState(defaultOpen);
@@ -99,6 +100,16 @@ export function QueueList({
                       ) : null}
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
+                      {job.status === "done" ? (
+                        <button
+                          type="button"
+                          aria-label="Pobierz plik"
+                          onClick={() => onReveal?.(job)}
+                          className="p-1.5 text-muted-foreground transition-colors duration-300 hover:text-primary"
+                        >
+                          <ArrowDownToLine className="size-3.5" strokeWidth={1.5} />
+                        </button>
+                      ) : null}
                       {job.status === "error" ? (
                         <button
                           type="button"
