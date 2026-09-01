@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { UrlField } from "@/components/downloader/UrlField";
 import { FormatSelect } from "@/components/downloader/FormatSelect";
 import { TransferPanel } from "@/components/downloader/TransferPanel";
@@ -13,6 +13,7 @@ import {
 } from "@/components/downloader/types";
 import { useDownloader } from "@/lib/downloader/useDownloader";
 import { parseYoutubeUrl } from "@/lib/downloader/validate";
+import type { PublicUser, SessionResponseDto } from "@/lib/auth/types.shared";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -40,6 +41,21 @@ function Index() {
   const [format, setFormat] = useState<MediaFormat>("mp4");
   const [quality, setQuality] = useState<string>(DEFAULT_QUALITY.mp4);
   const { jobs, start, cancel, retry, clearFinished, getDownloadUrl } = useDownloader();
+  const [me, setMe] = useState<PublicUser | null>(null);
+
+  // Hydration-safe: kim jesteśmy (spójne z odczytem localStorage w useDownloader).
+  useEffect(() => {
+    void fetch("/api/auth/session")
+      .then((res) => res.json() as Promise<SessionResponseDto>)
+      .then((data) => setMe(data.user))
+      .catch(() => undefined);
+  }, []);
+
+  const handleLogout = () => {
+    void fetch("/api/auth/logout", { method: "POST" }).finally(() =>
+      window.location.assign("/login"),
+    );
+  };
 
   // Walidacja URL: parser z warstwy logiki (kontrakt §6).
   const urlState: UrlFieldState = useMemo(() => {
@@ -105,6 +121,22 @@ function Index() {
           </span>
         </header>
 
+        {me ? (
+          <div className="mb-8 flex items-center justify-center gap-2 font-mono text-[10px] tracking-[0.14em] text-muted-foreground sm:mb-10 sm:text-[11px]">
+            <span>
+              Zalogowano jako <span className="text-foreground">{me.name}</span>
+            </span>
+            <span aria-hidden>·</span>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="underline-offset-4 transition-colors hover:text-foreground hover:underline"
+            >
+              Wyloguj
+            </button>
+          </div>
+        ) : null}
+
         <div className="rise space-y-8 sm:space-y-10">
           <UrlField
             value={url}
@@ -145,4 +177,3 @@ function Index() {
     </main>
   );
 }
-

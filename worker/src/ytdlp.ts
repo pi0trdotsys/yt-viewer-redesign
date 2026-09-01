@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 
 /**
  * Integracja z yt-dlp: budowanie argumentów, parsowanie postępu
@@ -33,12 +34,29 @@ export function maxDurationSec(): number {
   return Number.isFinite(raw) && raw > 0 ? raw : 21600;
 }
 
+/**
+ * Wsparcie cookies — ten sam wzorzec co w referencyjnym Pythonowym workerze
+ * (`cookies_file = "cookies.txt" if os.path.exists("cookies.txt") else None`,
+ * przekazywane do `ydl_opts["cookies"]`). Pozwala ominąć "Sign in to confirm
+ * you're not a bot" na hostach bez zalogowanej sesji przeglądarki.
+ */
+export function resolveCookiesFile(): string | null {
+  const path = process.env["COOKIES_FILE"];
+  if (!path) return null;
+  return existsSync(path) ? path : null;
+}
+
+function cookieArgs(): string[] {
+  const path = resolveCookiesFile();
+  return path ? ["--cookies", path] : [];
+}
+
 /** Faza resolving: metadane pojedynczego wideo lub lista playlisty. */
 export function probe(url: string): Promise<YtdlMetadata> {
   const isPlaylist = /\/playlist\?|[?&]list=/.test(url) && !/[?&]v=/.test(url);
   const args = isPlaylist
-    ? ["--flat-playlist", "--dump-single-json", "--no-warnings", "--", url]
-    : ["--no-playlist", "--dump-single-json", "--no-warnings", "--", url];
+    ? ["--flat-playlist", "--dump-single-json", "--no-warnings", ...cookieArgs(), "--", url]
+    : ["--no-playlist", "--dump-single-json", "--no-warnings", ...cookieArgs(), "--", url];
 
   return new Promise((resolve, reject) => {
     const child = spawn(ytdlBin(), args, { stdio: ["ignore", "pipe", "pipe"] });
@@ -98,6 +116,7 @@ export function buildDownloadArgs(jobId: string, format: string, quality: string
     "--no-mtime",
     "--progress-template",
     `download:${PROGRESS_PREFIX}%(progress.downloaded_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s`,
+    ...cookieArgs(),
     "-o",
     outTemplate,
   ];

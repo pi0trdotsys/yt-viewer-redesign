@@ -7,9 +7,17 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      # Basic Auth (wymagane w produkcji — server.ts odmawia bez tego)
-      AUTH_USER: ${AUTH_USER:?set AUTH_USER in .env}
-      AUTH_PASSWORD_SHA256: ${AUTH_PASSWORD_SHA256:?set AUTH_PASSWORD_SHA256 in .env}
+      # Logowanie — 3 profile (wymagane w produkcji — server.ts odmawia bez tego)
+      AUTH_USER_1: ${AUTH_USER_1:?set AUTH_USER_1 in .env}
+      AUTH_PASSWORD_SHA256_1: ${AUTH_PASSWORD_SHA256_1:?set AUTH_PASSWORD_SHA256_1 in .env}
+      AUTH_NAME_1: ${AUTH_NAME_1:-}
+      AUTH_USER_2: ${AUTH_USER_2:?set AUTH_USER_2 in .env}
+      AUTH_PASSWORD_SHA256_2: ${AUTH_PASSWORD_SHA256_2:?set AUTH_PASSWORD_SHA256_2 in .env}
+      AUTH_NAME_2: ${AUTH_NAME_2:-}
+      AUTH_USER_3: ${AUTH_USER_3:?set AUTH_USER_3 in .env}
+      AUTH_PASSWORD_SHA256_3: ${AUTH_PASSWORD_SHA256_3:?set AUTH_PASSWORD_SHA256_3 in .env}
+      AUTH_NAME_3: ${AUTH_NAME_3:-}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
       # Gateway → worker
       WORKER_URL: http://worker:8081
       WORKER_TOKEN: ${WORKER_TOKEN:?set WORKER_TOKEN in .env}
@@ -29,8 +37,12 @@ services:
       MAX_CONCURRENT_JOBS: ${MAX_CONCURRENT_JOBS:-2}
       MAX_PLAYLIST_ITEMS: ${MAX_PLAYLIST_ITEMS:-25}
       MAX_DURATION_SEC: ${MAX_DURATION_SEC:-21600}
+      # Opcjonalnie: patrz komentarz przy COOKIES_FILE w .env.example.
+      COOKIES_FILE: ${COOKIES_FILE:-}
     volumes:
       - ./downloads:/data
+      # Odkomentuj, jeśli ustawiasz COOKIES_FILE=/data/cookies.txt w .env:
+      # - ./cookies.txt:/data/cookies.txt:ro
     healthcheck:
       test:
         [

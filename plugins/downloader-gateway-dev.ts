@@ -3,11 +3,15 @@ import { Readable } from "node:stream";
 import type { Plugin } from "vite";
 
 import { handleDownloaderApi } from "../src/lib/downloader/gateway.server";
+import { handleAuthApi } from "../src/lib/auth/gateway.server";
+import { guardPageRequest } from "../src/lib/auth/guard.server";
 
 /**
- * Dev-only middleware obsługujące gateway /api/public/* (produkcja obsługuje
- * te same ścieżki w src/server.ts). Dzięki temu `vite dev` działa bez Dockera,
- * o ile worker (WORKER_URL) jest osiągalny.
+ * Dev-only middleware obsługujące gateway /api/public/*, /api/auth/* oraz
+ * ochronę stron `/` i `/login` (produkcja obsługuje to samo w src/server.ts —
+ * Nitro node-server entry nie jest używany pod `vite dev`). Dzięki temu cały
+ * flow logowania i pobierania da się przetestować bez Dockera, o ile worker
+ * (WORKER_URL) jest osiągalny.
  */
 export function downloaderGatewayDevPlugin(): Plugin {
   return {
@@ -15,13 +19,17 @@ export function downloaderGatewayDevPlugin(): Plugin {
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const url = req.url ?? "";
-        if (!url.startsWith("/api/")) {
+        const method = req.method ?? "GET";
+        const isApi = url.startsWith("/api/");
+        const isGuardedPage =
+          (method === "GET" || method === "HEAD") && (url === "/" || url.startsWith("/login"));
+
+        if (!isApi && !isGuardedPage) {
           next();
           return;
         }
 
         const host = req.headers.host ?? "localhost";
-        const method = req.method ?? "GET";
         const headers = new Headers();
         for (const [key, value] of Object.entries(req.headers)) {
           if (typeof value === "string") headers.set(key, value);
@@ -29,7 +37,7 @@ export function downloaderGatewayDevPlugin(): Plugin {
         }
 
         const init: RequestInit = { method, headers };
-        if (method !== "GET" && method !== "HEAD") {
+        if (isApi && method !== "GET" && method !== "HEAD") {
           const chunks: Buffer[] = [];
           let size = 0;
           for await (const chunk of req) {
@@ -46,7 +54,22 @@ export function downloaderGatewayDevPlugin(): Plugin {
 
         try {
           const request = new Request(`http://${host}${url}`, init);
-          const response = await handleDownloaderApi(request);
+
+          if (isGuardedPage) {
+            const guardResponse = guardPageRequest(request);
+            if (guardResponse) {
+              res.writeHead(
+                guardResponse.status,
+                Object.fromEntries(guardResponse.headers.entries()),
+              );
+              res.end();
+              return;
+            }
+            next();
+            return;
+          }
+
+          const response = (await handleAuthApi(request)) ?? (await handleDownloaderApi(request));
           if (!response) {
             next();
             return;

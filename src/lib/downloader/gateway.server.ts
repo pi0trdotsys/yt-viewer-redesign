@@ -1,3 +1,5 @@
+import { getSessionUser } from "../auth/session.server";
+
 /**
  * Gateway /api/public/* → worker yt-dlp (Model A z kontraktu §1.1).
  * Kod wyłącznie serwerowy — używany przez `src/server.ts` (produkcja)
@@ -6,8 +8,9 @@
  * Zasady:
  * - czyta env wyłącznie wewnątrz funkcji (kontrakt §2),
  * - nie modyfikuje body/strumieni — SSE i pliki przepływają strumieniowo,
- * - autoryzacją żądań zajmuje się Basic Auth (server.ts); token joba
- *   (`streamToken`) weryfikuje worker na endpointach /events i /files.
+ * - autoryzacja żądań: sesja logowania (ciasteczko, `getSessionUser`) —
+ *   sprawdzana tu, żeby działać identycznie w dev i produkcji. Token joba
+ *   (`streamToken`) dodatkowo weryfikuje worker na endpointach /events i /files.
  */
 
 const PUBLIC_PREFIX = "/api/public/";
@@ -63,6 +66,10 @@ export async function handleDownloaderApi(request: Request): Promise<Response | 
   }
 
   if (!pathname.startsWith(PUBLIC_PREFIX)) return null;
+
+  if (getSessionUser(request) === null) {
+    return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  }
 
   return forwardToWorker(request, workerPath(request));
 }

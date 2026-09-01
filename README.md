@@ -36,7 +36,7 @@
                   │                  (Zero Trust)
    ┌──────────────┴──────────────────┴─────────┐
    │  app  (port 3000, 127.0.0.1)              │
-   │  ├── Basic Auth                            │
+   │  ├── logowanie (profile picker, 3 konta)   │
    │  ├── gateway /api/public/*                 │
    │  └── proxy ──────────────────────►   worker │
    │        yt-dlp · ffmpeg (port 8081)        │
@@ -46,7 +46,7 @@
 
 | warstwa     | opis                                              |
 | ----------- | ------------------------------------------------- |
-| **app**     | TanStack Start · SSR · `node-server` · Basic Auth |
+| **app**     | TanStack Start · SSR · `node-server` · logowanie (sesja) |
 | **gateway** | `/api/public/*` → reverse proxy do workera        |
 | **worker**  | yt-dlp + ffmpeg · Bun · SSE + limity              |
 | **tunel**   | Cloudflare Tunnel → Twoja poddomena               |
@@ -72,7 +72,7 @@ pełny przewodnik: [`docs/DEPLOY.md`](./docs/DEPLOY.md)
 ```bash
 git clone https://github.com/pi0trdotsys/yt-viewer-redesign
 cd yt-viewer-redesign
-cp .env.example .env        # AUTH_USER · AUTH_PASSWORD_SHA256 · WORKER_TOKEN · TUNNEL_TOKEN
+cp .env.example .env        # AUTH_USER_1..3 · AUTH_PASSWORD_SHA256_1..3 · SESSION_SECRET · WORKER_TOKEN · TUNNEL_TOKEN
 docker compose up -d --build
 ```
 
@@ -91,10 +91,14 @@ aplikacja pod `127.0.0.1:3000` (chroniona hasłem), pliki w `./downloads/`.
 
 ## 4. bezpieczeństwo
 
-- **Basic Auth** — każde żądanie odpyta przeglądarkę o login + hasło
+- **logowanie** — ekran typu profile picker, 3 osobne konta (`AUTH_USER_1..3`),
+  sesja w podpisanym (HMAC) ciasteczku `HttpOnly` ważnym 30 dni
 - **WORKER_TOKEN** — app → worker, port workera nie publikowany
 - **token joba** — HMAC (SHA-256) chroni SSE i pobieranie pliku
-- **limity** — równoległe zadania, długość playlisty, długość filmu
+- **limity** — równoległe zadania, długość playlisty, długość filmu,
+  rate-limit prób logowania
+- **COOKIES_FILE** (opcjonalnie) — plik cookies.txt dla yt-dlp, gdy YouTube
+  blokuje pobieranie bez zalogowanej sesji przeglądarki
 - opcjonalnie: **Cloudflare Access** przed domeną
 
 ---

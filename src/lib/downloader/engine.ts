@@ -250,7 +250,7 @@ export class HttpDownloaderEngine {
 
   private openStream(jobId: string, token: string): void {
     const source = new EventSource(
-      `/api/public/progress/${encodeURIComponent(jobId)}?token=${encodeURIComponent(token)}`,
+      `/api/public/jobs/${encodeURIComponent(jobId)}/events?token=${encodeURIComponent(token)}`,
     );
 
     source.addEventListener("job", (event) => {

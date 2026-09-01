@@ -4,7 +4,7 @@ Architektura: `docker-compose.yml` uruchamia trzy usługi:
 
 | Usługa        | Rola                                                                  | Port                   |
 | ------------- | --------------------------------------------------------------------- | ---------------------- |
-| `app`         | Aplikacja TanStack Start (SSR + Basic Auth + gateway `/api/public/*`) | 3000 (tylko localhost) |
+| `app`         | Aplikacja TanStack Start (SSR + logowanie + gateway `/api/public/*`) | 3000 (tylko localhost) |
 | `worker`      | yt-dlp + ffmpeg (Bun), API + SSE + serwowanie plików                  | 8081 (wewnętrzny)      |
 | `cloudflared` | Tunel Cloudflare → `app:3000`                                         | —                      |
 
@@ -28,17 +28,23 @@ cd yt-viewer-redesign
 
 ```sh
 cp .env.example .env
-openssl rand -hex 32            # → WORKER_TOKEN
-echo -n "TwojeHaslo" | sha256sum  # → AUTH_PASSWORD_SHA256 (bez spacji z echo -n)
+openssl rand -hex 32              # → WORKER_TOKEN
+openssl rand -hex 32              # → SESSION_SECRET
+echo -n "HasloAlice" | sha256sum  # → AUTH_PASSWORD_SHA256_1 (bez spacji z echo -n)
+echo -n "HasloBob" | sha256sum    # → AUTH_PASSWORD_SHA256_2
+echo -n "HasloCarol" | sha256sum  # → AUTH_PASSWORD_SHA256_3
 nano .env
 ```
 
 Uzupełnij w `.env`:
 
-- `AUTH_USER` — login do okna Basic Auth,
-- `AUTH_PASSWORD_SHA256` — sha256 hasła (lowercase hex),
-- `WORKER_TOKEN` — losowy sekret,
-- `TUNNEL_TOKEN` — token tunelu (krok 4).
+- `AUTH_USER_1..3` / `AUTH_PASSWORD_SHA256_1..3` / `AUTH_NAME_1..3` — trzy
+  konta widoczne jako kafelki na ekranie logowania,
+- `SESSION_SECRET` — losowy sekret podpisujący ciasteczko sesji,
+- `WORKER_TOKEN` — losowy sekret app ↔ worker,
+- `TUNNEL_TOKEN` — token tunelu (krok 4),
+- opcjonalnie `COOKIES_FILE` — patrz komentarz w `.env.example`, jeśli
+  YouTube blokuje pobieranie ("Sign in to confirm you're not a bot").
 
 ## 4. Cloudflare Tunnel + subdomena
 
@@ -60,12 +66,13 @@ Weryfikacja:
 
 ```sh
 curl -s http://127.0.0.1:3000/api/health          # {"ok":true}
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/   # 401 (bez hasła)
-curl -s -u piotr:TwojeHaslo -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/  # 200
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/   # 302 (redirect → /login, bez sesji)
+curl -s http://127.0.0.1:3000/api/auth/session    # {"authenticated":false,"user":null,"users":[...]}
 ```
 
-Następnie otwórz `https://<twoja-subdomena>` — przeglądarka pokaże okno logowania
-(Basic Auth), a po zalogowaniu aplikację.
+Następnie otwórz `https://<twoja-subdomena>` — zobaczysz ekran logowania
+(kafelek na każde skonfigurowane konto), a po wybraniu profilu i podaniu
+hasła — aplikację.
 
 ## 6. Aktualizacja
 
@@ -85,12 +92,16 @@ ls -la downloads/                 # pliki z ukończonych pobrań
 
 ## Uwagi bezpieczeństwa
 
-- Serwis jest publicznie osiągalny pod subdomeną — Basic Auth jest pierwszą
-  linią obrony; użyj silnego hasła.
+- Serwis jest publicznie osiągalny pod subdomeną — ekran logowania (3 konta,
+  sesja w podpisanym ciasteczku `HttpOnly`) jest pierwszą linią obrony;
+  użyj silnych haseł. Logowanie ma prosty rate-limit (5 prób / 5 min na konto).
 - Worker akceptuje wyłącznie żądania z `WORKER_TOKEN`; port 8081 nie jest
   publikowany na hoście.
 - Limity: `MAX_CONCURRENT_JOBS`, `MAX_PLAYLIST_ITEMS`, `MAX_DURATION_SEC`
   ograniczają nadużycia (konfiguracja w `.env`).
+- Jeśli pobieranie kończy się błędem YouTube o weryfikacji bota, ustaw
+  `COOKIES_FILE` (patrz `.env.example`) — worker przekazuje ten plik do
+  `yt-dlp --cookies`, dokładnie jak w referencyjnym skrypcie Pythonowym.
 - Rozważ dodatkowo Cloudflare Access (Zero Trust) przed subdomeną, jeśli
   serwis ma być prywatny.
 
@@ -103,4 +114,8 @@ cd worker && bun install && WORKER_TOKEN=dev bun run src/index.ts   # worker :80
 ```
 
 W dev ustaw `WORKER_URL=http://127.0.0.1:8081` i `WORKER_TOKEN=dev` dla procesu
-dev serwera (np. w `.env.local` — Vite wczyta automatycznie).
+dev serwera (np. w `.env.local` — Vite wczyta automatycznie). Żeby przetestować
+ekran logowania lokalnie, dopisz też `SESSION_SECRET` oraz co najmniej jedno
+`AUTH_USER_1` / `AUTH_PASSWORD_SHA256_1` (bez tego `/api/auth/session` zwróci
+pustą listę userów i profile picker będzie pusty) — `/` i `/login` są chronione
+w `vite dev` tak samo jak w produkcji (patrz `plugins/downloader-gateway-dev.ts`).
