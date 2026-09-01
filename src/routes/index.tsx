@@ -89,13 +89,17 @@ function Index() {
 
   return (
     <main className="min-h-screen bg-background">
-      <div className="mx-auto flex min-h-screen max-w-xl flex-col px-6 py-16 sm:py-24">
-        <header className="mb-16 flex items-baseline justify-between">
-          <h1 className="font-display text-lg font-medium tracking-tight">YT Downloader</h1>
-          <span className="font-mono text-[11px] text-muted-foreground">~/Downloads</span>
+      <div className="mx-auto flex min-h-screen w-full max-w-xl flex-col px-4 py-10 sm:px-6 sm:py-16 lg:max-w-2xl lg:py-24">
+        <header className="mb-10 grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 sm:mb-16">
+          <h1 className="truncate font-display text-base font-medium tracking-tight sm:text-lg">
+            YT Downloader
+          </h1>
+          <span className="shrink-0 font-mono text-[10px] text-muted-foreground sm:text-[11px]">
+            ~/Downloads
+          </span>
         </header>
 
-        <div className="space-y-12">
+        <div className="space-y-8 sm:space-y-12">
           <UrlField
             value={url}
             onChange={setUrl}
@@ -120,7 +124,7 @@ function Index() {
           <TransferPanel job={activeJob} onCancel={handleCancel} />
         </div>
 
-        <div className="mt-16">
+        <div className="mt-10 sm:mt-16">
           <QueueList
             jobs={jobs}
             onCancel={handleCancel}

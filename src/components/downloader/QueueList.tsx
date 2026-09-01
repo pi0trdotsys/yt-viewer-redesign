@@ -35,15 +35,15 @@ export function QueueList({
 
   return (
     <section className="space-y-4">
-      <div className="flex items-baseline justify-between">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="label-mono flex items-center gap-2 transition-colors hover:text-foreground"
+          className="label-mono flex min-w-0 items-center gap-2 truncate transition-colors hover:text-foreground"
         >
           <ChevronDown
-            className={`size-3 transition-transform duration-300 ${open ? "" : "-rotate-90"}`}
+            className={`size-3 shrink-0 transition-transform duration-300 ${open ? "" : "-rotate-90"}`}
             strokeWidth={1.5}
           />
           Kolejka · {jobs.length}
@@ -52,7 +52,7 @@ export function QueueList({
         <button
           type="button"
           onClick={onClearFinished}
-          className="font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+          className="shrink-0 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
         >
           wyczyść
         </button>
@@ -79,7 +79,7 @@ export function QueueList({
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm text-foreground">{job.title ?? job.url}</p>
-                      <p className="mt-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+                      <p className="mt-0.5 font-mono text-[10px] tabular-nums text-muted-foreground sm:text-[11px]">
                         {job.format} · {job.quality} · {formatDuration(job.durationSec)} ·{" "}
                         {STATUS_LABEL[job.status]}
                         {busy ? ` ${job.progress.toFixed(0)}%` : ""}
