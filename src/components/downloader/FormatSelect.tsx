@@ -22,7 +22,7 @@ export function FormatSelect({
   disabled,
 }: FormatSelectProps) {
   return (
-    <div className="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-end">
+    <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
       <div className="space-y-2">
         <span className="label-mono">Format</span>
         <div role="radiogroup" aria-label="Format pliku" className="grid grid-cols-2 gap-2">
@@ -36,19 +36,19 @@ export function FormatSelect({
                 aria-checked={active}
                 disabled={disabled}
                 onClick={() => onFormatChange(id)}
-                className={`group relative flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-all duration-300 disabled:opacity-50 ${
+                className={`group relative flex min-w-0 items-center gap-2 rounded-lg border px-3 py-3 text-left transition-all duration-300 disabled:opacity-50 sm:gap-3 sm:px-4 ${
                   active
                     ? "border-primary/60 bg-primary/10 shadow-[var(--glow-primary)]"
                     : "border-border bg-surface-2/40 hover:border-primary/30"
                 }`}
               >
                 <Icon
-                  className={`size-4 ${active ? "text-primary" : "text-muted-foreground"}`}
+                  className={`size-4 shrink-0 ${active ? "text-primary" : "text-muted-foreground"}`}
                   strokeWidth={1.5}
                 />
-                <span>
+                <span className="min-w-0">
                   <span className="block font-display text-sm font-medium">{label}</span>
-                  <span className="block text-[11px] text-muted-foreground">{sub}</span>
+                  <span className="block truncate text-[11px] text-muted-foreground">{sub}</span>
                 </span>
               </button>
             );

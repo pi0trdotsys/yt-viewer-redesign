@@ -6,20 +6,20 @@ export type JobStatus =
 export interface DownloadJob {
   id: string;
   url: string;
-  title?: string;
-  thumbnailUrl?: string;
-  durationSec?: number;
+  title?: string | undefined;
+  thumbnailUrl?: string | undefined;
+  durationSec?: number | undefined;
   format: MediaFormat;
   quality: string;
   status: JobStatus;
   /** 0..100 */
   progress: number;
-  speedBytesPerSec?: number;
-  etaSec?: number;
-  downloadedBytes?: number;
-  totalBytes?: number;
-  outputPath?: string;
-  error?: string;
+  speedBytesPerSec?: number | undefined;
+  etaSec?: number | undefined;
+  downloadedBytes?: number | undefined;
+  totalBytes?: number | undefined;
+  outputPath?: string | undefined;
+  error?: string | undefined;
 }
 
 export type UrlFieldState = "neutral" | "valid" | "invalid";

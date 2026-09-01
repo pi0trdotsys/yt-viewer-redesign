@@ -10,7 +10,9 @@ function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="space-y-1">
       <span className="label-mono block">{label}</span>
-      <span className="block font-mono text-sm tabular-nums text-foreground">{value}</span>
+      <span className="block truncate font-mono text-xs tabular-nums text-foreground sm:text-sm">
+        {value}
+      </span>
     </div>
   );
 }
@@ -21,13 +23,13 @@ export function TransferPanel({ job, onCancel }: TransferPanelProps) {
   const indeterminate = job?.status === "resolving";
 
   return (
-    <div className="space-y-5 border-t border-border pt-8">
-      <div className="flex items-baseline justify-between">
-        <span className="font-display text-5xl font-light tabular-nums tracking-tight transition-opacity duration-300">
+    <div className="space-y-5 border-t border-border pt-6 sm:pt-8">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3">
+        <span className="font-display text-4xl font-light tabular-nums tracking-tight transition-opacity duration-300 sm:text-5xl">
           {progress.toFixed(1)}
-          <span className="text-2xl text-muted-foreground">%</span>
+          <span className="text-xl text-muted-foreground sm:text-2xl">%</span>
         </span>
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
           <span
             className={`font-mono text-[11px] tracking-[0.18em] uppercase ${
               job?.status === "error" ? "text-destructive" : "text-muted-foreground"
@@ -64,7 +66,7 @@ export function TransferPanel({ job, onCancel }: TransferPanelProps) {
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <Metric
           label="Pobrano"
           value={`${formatBytes(job?.downloadedBytes)} / ${formatBytes(job?.totalBytes)}`}
