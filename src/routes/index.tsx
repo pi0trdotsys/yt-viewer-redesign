@@ -64,6 +64,8 @@ function Index() {
   }, [url]);
 
   const activeJob = jobs.find((j) => j.status === "downloading" || j.status === "converting");
+  const canStart = urlState === "valid" && !activeJob;
+
 
   const handleFormatChange = (next: MediaFormat) => {
     setFormat(next);
