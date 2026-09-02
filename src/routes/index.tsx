@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { UrlField } from "@/components/downloader/UrlField";
 import { FormatSelect } from "@/components/downloader/FormatSelect";
 import { TransferPanel } from "@/components/downloader/TransferPanel";
@@ -14,6 +15,7 @@ import {
 import { useDownloader } from "@/lib/downloader/useDownloader";
 import { parseYoutubeUrl } from "@/lib/downloader/validate";
 import type { PublicUser, SessionResponseDto } from "@/lib/auth/types.shared";
+import { accentClasses, initials } from "@/lib/auth/avatar";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -83,9 +85,26 @@ function Index() {
     void retry(jobId);
   };
 
-  const handleReveal = (job: DownloadJob) => {
+  // Pliki znikają z serwera zaraz po pobraniu (albo po krótkim TTL, jeśli
+  // nikt ich nie odbierze) — HEAD sprawdza dostępność, żeby spóźnione
+  // kliknięcie kończyło się czytelnym komunikatem, a nie nawigacją karty
+  // na surowy JSON błędu z workera.
+  const handleReveal = async (job: DownloadJob) => {
     const downloadUrl = getDownloadUrl(job.id);
-    if (!downloadUrl) return;
+    if (!downloadUrl) {
+      toast.error("Plik niedostępny — spróbuj pobrać ponownie");
+      return;
+    }
+    try {
+      const check = await fetch(downloadUrl, { method: "HEAD" });
+      if (!check.ok) {
+        toast.error("Plik już nie jest dostępny na serwerze — uruchom pobieranie ponownie");
+        return;
+      }
+    } catch {
+      toast.error("Nie udało się połączyć z serwerem");
+      return;
+    }
     const anchor = document.createElement("a");
     anchor.href = downloadUrl;
     anchor.rel = "noopener";
@@ -123,6 +142,12 @@ function Index() {
 
         {me ? (
           <div className="mb-8 flex items-center justify-center gap-2 font-mono text-[10px] tracking-[0.14em] text-muted-foreground sm:mb-10 sm:text-[11px]">
+            <span
+              className={`grid size-5 shrink-0 place-items-center rounded-full border text-[10px] ${accentClasses(me.accent).avatar}`}
+              aria-hidden
+            >
+              {me.avatar ?? initials(me.name)}
+            </span>
             <span>
               Zalogowano jako <span className="text-foreground">{me.name}</span>
             </span>

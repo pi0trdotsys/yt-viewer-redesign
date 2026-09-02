@@ -40,11 +40,15 @@ Uzupełnij w `.env`:
 
 - `AUTH_USER_1..3` / `AUTH_PASSWORD_SHA256_1..3` / `AUTH_NAME_1..3` — trzy
   konta widoczne jako kafelki na ekranie logowania,
+- opcjonalnie `AUTH_AVATAR_1..3` (pojedynczy emoji zamiast inicjałów) i
+  `AUTH_ACCENT_1..3` (`primary` domyślnie albo `navy`),
 - `SESSION_SECRET` — losowy sekret podpisujący ciasteczko sesji,
 - `WORKER_TOKEN` — losowy sekret app ↔ worker,
 - `TUNNEL_TOKEN` — token tunelu (krok 4),
 - opcjonalnie `COOKIES_FILE` — patrz komentarz w `.env.example`, jeśli
-  YouTube blokuje pobieranie ("Sign in to confirm you're not a bot").
+  YouTube blokuje pobieranie ("Sign in to confirm you're not a bot"),
+- opcjonalnie `FILE_TTL_SEC` (domyślnie `1800` = 30 min) — po tylu
+  sekundach worker kasuje z dysku plik, którego nikt nie odebrał.
 
 ## 4. Cloudflare Tunnel + subdomena
 
@@ -94,8 +98,24 @@ w `docker compose logs cloudflared`). Restart każe mu rozwiązać `app` na nowo
 docker compose ps
 docker compose logs --tail=100 app
 docker compose logs --tail=100 worker
-ls -la downloads/                 # pliki z ukończonych pobrań
+ls -la downloads/                 # powinno być prawie zawsze puste — patrz niżej
 ```
+
+## 8. Sprzątanie `downloads/`
+
+Od wersji z automatycznym kasowaniem plików po pobraniu, `./downloads/`
+powinno w praktyce świecić pustką — plik trafia tam tylko na czas trwania
+transferu do przeglądarki i jest kasowany zaraz po jego zakończeniu
+(nieodebrane znikają same po `FILE_TTL_SEC`). Jeśli katalog zdążył się
+zapełnić przed tą zmianą (albo z jobów przerwanych w trakcie — `*.part`),
+posprzątaj go ręcznie jednorazowo:
+
+```sh
+rm -f ~/yt-viewer-redesign/downloads/*
+```
+
+Bezpieczne — katalog służy wyłącznie jako tymczasowy bufor workera, appka
+sama go nigdzie indziej nie odczytuje.
 
 ## Uwagi bezpieczeństwa
 

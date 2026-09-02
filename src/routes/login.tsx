@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, Loader2, LockKeyhole } from "lucide-react";
 
 import type { PublicUser, SessionResponseDto } from "@/lib/auth/types.shared";
+import { accentClasses, initials } from "@/lib/auth/avatar";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -13,13 +14,6 @@ export const Route = createFileRoute("/login")({
   }),
   component: Login,
 });
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
-  return `${parts[0]![0]}${parts[parts.length - 1]![0]}`.toUpperCase();
-}
 
 function Login() {
   const [users, setUsers] = useState<PublicUser[] | null>(null);
@@ -120,22 +114,27 @@ function Login() {
                   Brak skonfigurowanych użytkowników — sprawdź zmienne AUTH_USER_1..3
                 </p>
               ) : (
-                <div className="grid grid-cols-3 gap-3 sm:gap-4">
-                  {users.map((user) => (
-                    <button
-                      key={user.id}
-                      type="button"
-                      onClick={() => selectUser(user)}
-                      className="group flex flex-col items-center gap-2.5 rounded-xl border border-border/60 bg-surface-2/30 px-2 py-4 transition-all duration-300 hover:border-primary/50 hover:bg-primary/8 hover:shadow-[var(--glow-primary)] focus-visible:border-primary/50 focus-visible:shadow-[var(--glow-primary)] focus-visible:outline-none"
-                    >
-                      <span className="grid size-14 shrink-0 place-items-center rounded-full border border-primary/30 bg-primary/10 font-display text-lg text-primary transition-transform duration-300 group-hover:scale-105">
-                        {initials(user.name)}
-                      </span>
-                      <span className="w-full truncate text-center text-xs text-foreground sm:text-sm">
-                        {user.name}
-                      </span>
-                    </button>
-                  ))}
+                <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                  {users.map((user) => {
+                    const accent = accentClasses(user.accent);
+                    return (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onClick={() => selectUser(user)}
+                        className={`group flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-surface-2/30 px-1.5 py-3 transition-all duration-300 hover:bg-primary/8 focus-visible:outline-none sm:gap-2.5 sm:px-2 sm:py-4 ${accent.tile}`}
+                      >
+                        <span
+                          className={`grid size-12 shrink-0 place-items-center rounded-full border font-display text-base transition-transform duration-300 group-hover:scale-105 sm:size-14 sm:text-lg ${accent.avatar}`}
+                        >
+                          {user.avatar ?? initials(user.name)}
+                        </span>
+                        <span className="w-full truncate text-center text-xs text-foreground sm:text-sm">
+                          {user.name}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </>
@@ -150,8 +149,10 @@ function Login() {
                 >
                   <ArrowLeft className="size-4" strokeWidth={1.75} />
                 </button>
-                <span className="grid size-10 shrink-0 place-items-center rounded-full border border-primary/30 bg-primary/10 font-display text-sm text-primary">
-                  {initials(selected.name)}
+                <span
+                  className={`grid size-10 shrink-0 place-items-center rounded-full border font-display text-sm ${accentClasses(selected.accent).avatar}`}
+                >
+                  {selected.avatar ?? initials(selected.name)}
                 </span>
                 <span className="truncate font-display text-base tracking-tight">
                   {selected.name}

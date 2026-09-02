@@ -65,6 +65,8 @@ interface InternalJob {
   lastEmitAt: number;
   pendingTimer: ReturnType<typeof setTimeout> | null;
   pendingDto: JobDto | null;
+  /** Kiedy zadanie weszło w stan terminalny — do TTL nieodebranych plików. */
+  finishedAt?: number;
 }
 
 export class JobManager {
@@ -74,6 +76,7 @@ export class JobManager {
   private secret: string;
   private maxConcurrent: number;
   private maxPlaylistItems: number;
+  private fileTtlMs: number;
 
   constructor(secret: string) {
     this.secret = secret;
@@ -81,6 +84,14 @@ export class JobManager {
     this.maxConcurrent = Number.isFinite(concurrent) && concurrent > 0 ? concurrent : 2;
     const playlist = Number(process.env["MAX_PLAYLIST_ITEMS"] ?? "25");
     this.maxPlaylistItems = Number.isFinite(playlist) && playlist > 0 ? playlist : 25;
+    const ttlSec = Number(process.env["FILE_TTL_SEC"] ?? "1800");
+    this.fileTtlMs = (Number.isFinite(ttlSec) && ttlSec > 0 ? ttlSec : 1800) * 1000;
+
+    // Siatka bezpieczeństwa: appka nie ma pełnić roli trwałego magazynu —
+    // plik dostarczony do przeglądarki jest kasowany od razu (patrz
+    // deleteJobFiles() wołane z fileResponse w index.ts), a to tylko
+    // sprząta pliki nigdy nieodebrane przez użytkownika.
+    setInterval(() => void this.sweepExpiredFiles(), 5 * 60 * 1000).unref();
   }
 
   // --- API ------------------------------------------------------------------
@@ -377,10 +388,36 @@ export class JobManager {
     }
   }
 
+  /**
+   * Kasuje plik wynikowy joba z dysku — wołane z `fileResponse()` w
+   * index.ts zaraz po pełnym wysłaniu pliku do przeglądarki (albo przy
+   * przerwaniu transferu przez klienta), oraz przez `sweepExpiredFiles()`
+   * dla plików nigdy nieodebranych. Appka nie ma pełnić roli trwałego
+   * magazynu plików.
+   */
+  async deleteJobFiles(jobId: string): Promise<void> {
+    await this.cleanupFiles(jobId);
+    const job = this.jobs.get(jobId);
+    if (job?.dto.hasFile) {
+      job.dto = { ...job.dto, hasFile: false };
+    }
+  }
+
+  /** TTL dla plików, których nikt nie odebrał (§ konstruktor). */
+  private async sweepExpiredFiles(): Promise<void> {
+    const now = Date.now();
+    for (const job of this.jobs.values()) {
+      if (job.dto.status !== "done" || !job.dto.hasFile || !job.finishedAt) continue;
+      if (now - job.finishedAt < this.fileTtlMs) continue;
+      await this.deleteJobFiles(job.dto.id);
+    }
+  }
+
   // --- emisje z throttlingiem ----------------------------------------------
 
   private finish(job: InternalJob, dto: JobDto): void {
     job.dto = dto;
+    if (TERMINAL.includes(dto.status)) job.finishedAt = Date.now();
     if (dto.status === "error") {
       // Jedyny ślad błędu w `docker compose logs worker` — bez tego
       // nieudane pobrania są widoczne tylko w UI, nie w logach kontenera.

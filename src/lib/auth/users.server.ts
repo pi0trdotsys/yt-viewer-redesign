@@ -1,5 +1,5 @@
 import { sha256Hex, timingSafeEqualHex } from "./crypto.server";
-import type { PublicUser } from "./types.shared";
+import { USER_ACCENTS, type PublicUser, type UserAccent } from "./types.shared";
 
 /**
  * Trzej użytkownicy aplikacji, konfigurowani przez env (analogicznie do
@@ -7,6 +7,8 @@ import type { PublicUser } from "./types.shared";
  *   AUTH_USER_n            — login (widoczny jako nazwa kafelka, jeśli brak AUTH_NAME_n)
  *   AUTH_PASSWORD_SHA256_n — sha256 (lowercase hex) hasła
  *   AUTH_NAME_n            — opcjonalna nazwa wyświetlana
+ *   AUTH_AVATAR_n           — opcjonalny emoji zamiast inicjałów na kafelku
+ *   AUTH_ACCENT_n           — opcjonalny wariant koloru: "primary" | "navy"
  *
  * Env czytany wyłącznie wewnątrz funkcji (kontrakt §2) — nigdy w module scope.
  */
@@ -15,9 +17,18 @@ interface ConfiguredUser {
   id: string;
   name: string;
   passwordSha256: string;
+  avatar?: string | undefined;
+  accent: UserAccent;
 }
 
 const SLOTS = [1, 2, 3] as const;
+
+function parseAccent(raw: string | undefined): UserAccent {
+  const value = raw?.trim().toLowerCase();
+  return (USER_ACCENTS as readonly string[]).includes(value ?? "")
+    ? (value as UserAccent)
+    : "primary";
+}
 
 function loadUsers(): ConfiguredUser[] {
   const users: ConfiguredUser[] = [];
@@ -26,7 +37,9 @@ function loadUsers(): ConfiguredUser[] {
     const passwordSha256 = (process.env[`AUTH_PASSWORD_SHA256_${slot}`] ?? "").trim().toLowerCase();
     if (!id || !passwordSha256) continue;
     const name = process.env[`AUTH_NAME_${slot}`]?.trim() || id;
-    users.push({ id, name, passwordSha256 });
+    const avatar = process.env[`AUTH_AVATAR_${slot}`]?.trim() || undefined;
+    const accent = parseAccent(process.env[`AUTH_ACCENT_${slot}`]);
+    users.push({ id, name, passwordSha256, avatar, accent });
   }
   return users;
 }
@@ -36,14 +49,18 @@ export function authConfigured(): boolean {
   return loadUsers().length > 0;
 }
 
+function toPublic(user: ConfiguredUser): PublicUser {
+  return { id: user.id, name: user.name, avatar: user.avatar, accent: user.accent };
+}
+
 /** Lista userów bez haseł — bezpieczna do wysłania klientowi (profile picker). */
 export function getPublicUsers(): PublicUser[] {
-  return loadUsers().map(({ id, name }) => ({ id, name }));
+  return loadUsers().map(toPublic);
 }
 
 export function findPublicUser(userId: string): PublicUser | null {
   const user = loadUsers().find((u) => u.id === userId);
-  return user ? { id: user.id, name: user.name } : null;
+  return user ? toPublic(user) : null;
 }
 
 export async function verifyCredentials(userId: string, password: string): Promise<boolean> {

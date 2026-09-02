@@ -105,7 +105,7 @@ export function QueueList({
                           type="button"
                           aria-label="Pobierz plik"
                           onClick={() => onReveal?.(job)}
-                          className="p-1.5 text-muted-foreground transition-colors duration-300 hover:text-primary"
+                          className="p-2.5 sm:p-1.5 text-muted-foreground transition-colors duration-300 hover:text-primary"
                         >
                           <ArrowDownToLine className="size-3.5" strokeWidth={1.5} />
                         </button>
@@ -115,7 +115,7 @@ export function QueueList({
                           type="button"
                           aria-label="Ponów"
                           onClick={() => onRetry?.(job.id)}
-                          className="p-1.5 text-muted-foreground transition-colors duration-300 hover:text-foreground"
+                          className="p-2.5 sm:p-1.5 text-muted-foreground transition-colors duration-300 hover:text-foreground"
                         >
                           <RotateCcw className="size-3.5" strokeWidth={1.5} />
                         </button>
@@ -125,7 +125,7 @@ export function QueueList({
                           type="button"
                           aria-label="Anuluj"
                           onClick={() => onCancel?.(job.id)}
-                          className="p-1.5 text-muted-foreground transition-colors duration-300 hover:text-destructive"
+                          className="p-2.5 sm:p-1.5 text-muted-foreground transition-colors duration-300 hover:text-destructive"
                         >
                           <X className="size-3.5" strokeWidth={1.5} />
                         </button>

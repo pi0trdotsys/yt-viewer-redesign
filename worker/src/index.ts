@@ -12,7 +12,14 @@ import { jobStreamToken, verifyBearer, verifyJobToken } from "./tokens";
  *   DELETE /jobs/:id             → {ok: true}
  *   POST   /jobs/:id/retry       → {jobs: [...]}
  *   GET    /jobs/:id/events      → SSE (event: job, heartbeat 15 s, §9)
- *   GET    /files/:id            → strumień pliku (Content-Disposition)
+ *   GET    /files/:id            → strumień pliku (Content-Disposition),
+ *                                   kasowany z dysku zaraz po pełnym wysłaniu
+ *   HEAD   /files/:id            → sam nagłówek — sprawdzenie dostępności
+ *                                   przed uruchomieniem pobierania w przeglądarce
+ *
+ * Pliki nie są trwałym magazynem: kasowane od razu po dostarczeniu do
+ * przeglądarki, a te nigdy nieodebrane — po FILE_TTL_SEC (domyślnie 30 min,
+ * patrz JobManager).
  *
  * Izolacja per-user: gateway (jedyny wołający, bo port workera nie jest
  * publikowany) ustawia nagłówek X-User-Id z id zalogowanego usera po
@@ -165,6 +172,7 @@ async function fileResponse(
   jobId: string,
   token: string | null,
   ownerId: string,
+  headOnly: boolean,
 ): Promise<Response> {
   const dto = manager.get(jobId, ownerId);
   if (!dto || dto.status !== "done") {
@@ -179,14 +187,47 @@ async function fileResponse(
   const file = Bun.file(path);
   const displayName = dto.outputPath ?? jobId;
   const asciiName = sanitizeFilename(displayName);
-  return new Response(file, {
-    headers: {
-      "content-type": "application/octet-stream",
-      "content-length": String(file.size),
-      "content-disposition": `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(displayName)}`,
-      "cache-control": "no-store",
+  const headers = {
+    "content-type": "application/octet-stream",
+    "content-length": String(file.size),
+    "content-disposition": `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(displayName)}`,
+    "cache-control": "no-store",
+  };
+
+  // HEAD: klient sprawdza dostępność przed uruchomieniem natywnego
+  // pobierania przeglądarki (patrz handleReveal w routes/index.tsx) —
+  // bez tego, plik skasowany w międzyczasie (patrz niżej) kończyłby się
+  // nawigacją karty na surowy JSON błędu zamiast czytelnego komunikatu.
+  if (headOnly) {
+    return new Response(null, { headers });
+  }
+
+  // Strumieniujemy plik do przeglądarki i kasujemy go z dysku zaraz po
+  // pełnym wysłaniu (albo przy przerwaniu transferu) — appka nie ma pełnić
+  // roli trwałego magazynu, plik ma trafić wyłącznie do użytkownika.
+  const source = file.stream();
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const reader = source.getReader();
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          controller.enqueue(value);
+        }
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      } finally {
+        await manager.deleteJobFiles(jobId);
+      }
+    },
+    async cancel() {
+      await manager.deleteJobFiles(jobId);
     },
   });
+
+  return new Response(body, { headers });
 }
 
 Bun.serve({
@@ -249,8 +290,13 @@ Bun.serve({
       }
 
       const fileMatch = /^\/files\/([0-9a-fA-F-]{36})$/.exec(path);
-      if (fileMatch && request.method === "GET") {
-        return await fileResponse(fileMatch[1]!, url.searchParams.get("token"), ownerId);
+      if (fileMatch && (request.method === "GET" || request.method === "HEAD")) {
+        return await fileResponse(
+          fileMatch[1]!,
+          url.searchParams.get("token"),
+          ownerId,
+          request.method === "HEAD",
+        );
       }
 
       return json({ error: "Not found" }, 404);

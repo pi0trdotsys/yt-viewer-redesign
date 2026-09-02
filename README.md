@@ -52,6 +52,8 @@ renderuje.
 - **yt-dlp + ffmpeg + deno** w osobnym, izolowanym workerze (Bun) — deno
   jest wymagany przez yt-dlp do deszyfrowania sygnatur YouTube (n-param);
   opcjonalne wsparcie `cookies.txt`, gdy YouTube blokuje pobieranie
+- **Bez trwałego magazynu plików** — plik trafia do przeglądarki i jest
+  od razu kasowany z dysku serwera; nieodebrane znikają po `FILE_TTL_SEC`
 - Zero zależności runtime poza Dockerem — wszystko wbudowane w obrazy,
   `git pull && docker compose up -d --build` i gotowe
 
@@ -128,7 +130,8 @@ cp .env.example .env        # AUTH_USER_1..3 · AUTH_PASSWORD_SHA256_1..3 · SES
 docker compose up -d --build
 ```
 
-aplikacja pod `127.0.0.1:3000` (za ekranem logowania), pliki w `./downloads/`.
+aplikacja pod `127.0.0.1:3000` (za ekranem logowania). Pliki trafiają do
+`./downloads/` tylko na czas przetwarzania — patrz sekcja niżej.
 
 ---
 
@@ -138,6 +141,8 @@ aplikacja pod `127.0.0.1:3000` (za ekranem logowania), pliki w `./downloads/`.
 - format — `mp3` / `mp4`, jakość 480p → 2160p / 128k → 320k
 - pasek transferu — pobieranie · konwersja · gotowe
 - kolejka — historia w `localStorage` (osobna per konto); pobieraj plik lub ponów
+- kafelek profilu — inicjały domyślnie, albo emoji z `AUTH_AVATAR_n` +
+  kolor z `AUTH_ACCENT_n` (`primary` / `navy`)
 
 ---
 
@@ -148,6 +153,9 @@ aplikacja pod `127.0.0.1:3000` (za ekranem logowania), pliki w `./downloads/`.
 - **izolacja per-user** — worker zna właściciela każdego zadania (nagłówek
   `X-User-Id` z gatewaya); jedno konto nie widzi, nie anuluje ani nie
   pobiera plików drugiego
+- **pliki nie są trwałym magazynem** — plik trafia do przeglądarki i jest
+  od razu kasowany z dysku serwera; nieodebrane (nikt nie kliknął pobierz)
+  są sprzątane po `FILE_TTL_SEC` (domyślnie 30 min)
 - **WORKER_TOKEN** — app → worker, port workera nie publikowany
 - **token joba** — HMAC (SHA-256) chroni SSE i pobieranie pliku
 - **limity** — równoległe zadania, długość playlisty, długość filmu,

@@ -5,9 +5,16 @@ import { z } from "zod";
  * bezpieczne do importu przez komponenty (np. `src/routes/login.tsx`).
  */
 
+export const USER_ACCENTS = ["primary", "navy"] as const;
+export type UserAccent = (typeof USER_ACCENTS)[number];
+
 export interface PublicUser {
   id: string;
   name: string;
+  /** Opcjonalny emoji zamiast inicjałów na kafelku logowania (AUTH_AVATAR_n). */
+  avatar?: string | undefined;
+  /** Wariant koloru kafelka/avatara (AUTH_ACCENT_n) — domyślnie "primary". */
+  accent: UserAccent;
 }
 
 export const loginInputSchema = z.object({

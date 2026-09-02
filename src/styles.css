@@ -33,6 +33,7 @@
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-grid: var(--grid);
+  --color-accent-navy: var(--accent-navy);
   --font-display: "Abril Fatface", ui-serif, Georgia, serif;
   --font-sans: "Cabin", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
@@ -62,11 +63,22 @@
   --input: oklch(0.29 0 0);
   --ring: oklch(0.628 0.258 29.2);
   --grid: oklch(0.3 0 0 / 45%);
-  --gradient-aurora: linear-gradient(120deg, var(--primary), oklch(0.52 0.22 15));
+  --gradient-aurora: linear-gradient(
+    120deg,
+    var(--primary) 0%,
+    oklch(0.52 0.22 15) 45%,
+    oklch(0.4 0.12 300) 100%
+  );
   --glow-primary:
     0 0 0 1px color-mix(in oklab, var(--primary) 35%, transparent),
     0 0 32px -8px color-mix(in oklab, var(--primary) 55%, transparent);
   --glow-soft: 0 24px 60px -32px color-mix(in oklab, var(--primary) 45%, transparent);
+
+  /* Wariant koloru dla konta z AUTH_ACCENT_n=navy (avatar/kafelek logowania). */
+  --accent-navy: oklch(0.6 0.14 258);
+  --glow-navy:
+    0 0 0 1px color-mix(in oklab, var(--accent-navy) 35%, transparent),
+    0 0 32px -8px color-mix(in oklab, var(--accent-navy) 55%, transparent);
 }
 
 @layer base {
@@ -90,10 +102,18 @@
 }
 
 @utility grid-field {
+  /* dwie warstwy — gruba siatka konstrukcyjna + delikatny podział 12px
+     (efekt blueprintu), obie wygaszane maską do środka kadru */
   background-image:
     linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: 48px 48px;
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+    linear-gradient(color-mix(in oklab, var(--grid) 40%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--grid) 40%, transparent) 1px, transparent 1px);
+  background-size:
+    48px 48px,
+    48px 48px,
+    12px 12px,
+    12px 12px;
   mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black, transparent 75%);
 }
 
