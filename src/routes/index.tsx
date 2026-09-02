@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { Heart } from "lucide-react";
 import { UrlField } from "@/components/downloader/UrlField";
 import { FormatSelect } from "@/components/downloader/FormatSelect";
 import { TransferPanel } from "@/components/downloader/TransferPanel";
@@ -188,6 +189,14 @@ function Index() {
           {announcement}
         </div>
       </div>
+
+      <footer className="pointer-events-none absolute bottom-0 left-0 right-0 flex justify-center pb-6 pt-10 sm:pb-8">
+        <div className="pointer-events-auto flex items-center gap-1.5 font-mono text-[10px] tracking-[0.22em] text-muted-foreground transition-colors hover:text-foreground sm:text-[11px]">
+          <span>Crafted with</span>
+          <Heart className="size-3 fill-primary/20 text-primary animate-pulse" aria-hidden />
+          <span>by NullPointerStudio</span>
+        </div>
+      </footer>
     </main>
   );
 }
