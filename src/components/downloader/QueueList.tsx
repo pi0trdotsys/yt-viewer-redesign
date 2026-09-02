@@ -41,7 +41,7 @@ export function QueueList({
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="label-mono flex min-w-0 items-center gap-2 truncate transition-colors duration-300 hover:text-foreground"
+          className="label-mono flex min-h-9 min-w-0 items-center gap-2 truncate transition-colors duration-300 hover:text-foreground"
         >
           <ChevronDown
             className={`size-3 shrink-0 transition-transform duration-500 ${open ? "" : "-rotate-90"}`}
