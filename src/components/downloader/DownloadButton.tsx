@@ -3,7 +3,7 @@ import { ArrowDownToLine, Square } from "lucide-react";
 interface DownloadButtonProps {
   busy?: boolean;
   disabled?: boolean;
-  hint?: string;
+  hint?: string | undefined;
   onStart: () => void;
   onCancel: () => void;
 }
