@@ -36,20 +36,20 @@ export function FormatSelect({
                 aria-checked={active}
                 disabled={disabled}
                 onClick={() => onFormatChange(id)}
-                className={`group relative flex min-w-0 items-center gap-3 overflow-hidden rounded-xl border px-3 py-3.5 text-left transition-all duration-500 disabled:opacity-50 sm:px-4 ${
+                className={`group relative flex min-h-16 min-w-0 items-center gap-3 overflow-hidden rounded-xl border px-3 py-3.5 text-left transition-all duration-500 disabled:opacity-50 sm:px-4 ${
                   active
                     ? "border-primary/45 bg-primary/8 text-foreground"
                     : "border-border/60 bg-surface-2/20 text-muted-foreground hover:border-primary/25 hover:bg-surface-2/40 hover:text-foreground"
                 }`}
               >
                 <Icon
-                  className={`size-4 shrink-0 transition-colors duration-300 ${
+                  className={`size-5 shrink-0 transition-colors duration-300 ${
                     active ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
                   }`}
                   strokeWidth={1.5}
                 />
                 <span className="min-w-0">
-                  <span className="block font-display text-sm leading-tight">{label}</span>
+                  <span className="block font-display text-base leading-tight">{label}</span>
                   <span className="block truncate text-[11px] text-muted-foreground">{sub}</span>
                 </span>
                 <span
@@ -66,7 +66,7 @@ export function FormatSelect({
 
       <div className="space-y-3">
         <span className="label-mono">Jakość</span>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-2">
           {QUALITY_OPTIONS[format].map((q) => {
             const active = q === quality;
             return (
@@ -76,7 +76,7 @@ export function FormatSelect({
                 disabled={disabled}
                 aria-pressed={active}
                 onClick={() => onQualityChange(q)}
-                className={`rounded-full border px-3 py-1.5 font-mono text-[11px] tracking-[0.08em] transition-all duration-300 disabled:opacity-50 ${
+                className={`min-h-10 rounded-full border px-4 py-2 font-mono text-[12px] tracking-[0.08em] transition-all duration-300 disabled:opacity-50 ${
                   active
                     ? "border-primary/50 bg-primary/12 text-foreground shadow-[var(--glow-primary)]"
                     : "border-border/60 bg-transparent text-muted-foreground hover:border-foreground/25 hover:text-foreground"
