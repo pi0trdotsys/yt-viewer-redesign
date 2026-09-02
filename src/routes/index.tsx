@@ -107,18 +107,10 @@ function Index() {
     <main className="relative min-h-screen overflow-hidden bg-background">
       <div aria-hidden className="grid-field pointer-events-none absolute inset-0 opacity-40" />
       <div className="halo relative mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center px-4 py-12 sm:px-6 sm:py-16 lg:max-w-2xl">
-        <header className="mb-10 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:mb-14">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-primary/40 bg-primary/10 font-mono text-[11px] tracking-tight text-primary">
-              YT
-            </span>
-            <h1 className="truncate font-display text-lg leading-none tracking-tight sm:text-xl">
-              Downloader
-            </h1>
-          </div>
-          <span className="shrink-0 rounded-full border border-border/60 px-3 py-1 font-mono text-[10px] tracking-[0.14em] text-muted-foreground sm:text-[11px]">
-            ~/Downloads
-          </span>
+        <header className="mb-10 flex justify-center sm:mb-14">
+          <h1 className="font-display text-lg leading-none tracking-tight text-foreground/90 sm:text-xl">
+            Downloader
+          </h1>
         </header>
 
         {me ? (
