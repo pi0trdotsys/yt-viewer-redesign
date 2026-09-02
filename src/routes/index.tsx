@@ -64,6 +64,8 @@ function Index() {
   }, [url]);
 
   const activeJob = jobs.find((j) => j.status === "downloading" || j.status === "converting");
+  const canStart = urlState === "valid" && !activeJob;
+
 
   const handleFormatChange = (next: MediaFormat) => {
     setFormat(next);
@@ -133,8 +135,18 @@ function Index() {
           <UrlField
             value={url}
             onChange={setUrl}
+            onSubmit={() => {
+              if (canStart) handleStart();
+            }}
             state={urlState}
             hint="watch · shorts · playlist"
+            message={
+              urlState === "invalid"
+                ? "To nie wygląda na poprawny link YouTube (watch, shorts, playlist lub youtu.be)."
+                : urlState === "valid"
+                  ? "Link rozpoznany — wybierz format i jakość."
+                  : "Obsługiwane: youtube.com/watch, /shorts, /playlist oraz youtu.be."
+            }
           />
 
           <FormatSelect
@@ -146,12 +158,22 @@ function Index() {
 
           <DownloadButton
             busy={Boolean(activeJob)}
-            disabled={urlState === "invalid"}
+            disabled={!canStart && !activeJob}
+            hint={
+              activeJob
+                ? undefined
+                : urlState === "neutral"
+                  ? "Wklej link, aby rozpocząć"
+                  : urlState === "invalid"
+                    ? "Popraw link, aby rozpocząć"
+                    : `${format.toUpperCase()} · ${quality}`
+            }
             onStart={handleStart}
             onCancel={() => handleCancel()}
           />
 
           <TransferPanel job={activeJob} onCancel={handleCancel} />
+
 
           <QueueList
             jobs={jobs}

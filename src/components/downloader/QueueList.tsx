@@ -41,7 +41,7 @@ export function QueueList({
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="label-mono flex min-w-0 items-center gap-2 truncate transition-colors duration-300 hover:text-foreground"
+          className="label-mono flex min-h-9 min-w-0 items-center gap-2 truncate transition-colors duration-300 hover:text-foreground"
         >
           <ChevronDown
             className={`size-3 shrink-0 transition-transform duration-500 ${open ? "" : "-rotate-90"}`}
@@ -53,10 +53,12 @@ export function QueueList({
         <button
           type="button"
           onClick={onClearFinished}
-          className="shrink-0 rounded-full border border-border/60 px-3 py-1 font-mono text-[10px] tracking-[0.14em] uppercase text-muted-foreground transition-colors duration-300 hover:border-foreground/30 hover:text-foreground"
+          disabled={jobs.length === 0}
+          className="min-h-9 shrink-0 rounded-full border border-border/60 px-3.5 py-1.5 font-mono text-[10px] tracking-[0.14em] uppercase text-muted-foreground transition-colors duration-300 hover:border-foreground/30 hover:text-foreground disabled:opacity-30"
         >
           wyczyść
         </button>
+
       </div>
 
       <div
@@ -104,33 +106,37 @@ export function QueueList({
                         <button
                           type="button"
                           aria-label="Pobierz plik"
+                          title="Pobierz plik"
                           onClick={() => onReveal?.(job)}
-                          className="p-1.5 text-muted-foreground transition-colors duration-300 hover:text-primary"
+                          className="grid size-10 place-items-center rounded-lg text-muted-foreground transition-colors duration-300 hover:bg-surface-2/60 hover:text-primary"
                         >
-                          <ArrowDownToLine className="size-3.5" strokeWidth={1.5} />
+                          <ArrowDownToLine className="size-4" strokeWidth={1.5} />
                         </button>
                       ) : null}
                       {job.status === "error" ? (
                         <button
                           type="button"
                           aria-label="Ponów"
+                          title="Ponów"
                           onClick={() => onRetry?.(job.id)}
-                          className="p-1.5 text-muted-foreground transition-colors duration-300 hover:text-foreground"
+                          className="grid size-10 place-items-center rounded-lg text-muted-foreground transition-colors duration-300 hover:bg-surface-2/60 hover:text-foreground"
                         >
-                          <RotateCcw className="size-3.5" strokeWidth={1.5} />
+                          <RotateCcw className="size-4" strokeWidth={1.5} />
                         </button>
                       ) : null}
                       {busy ? (
                         <button
                           type="button"
                           aria-label="Anuluj"
+                          title="Anuluj"
                           onClick={() => onCancel?.(job.id)}
-                          className="p-1.5 text-muted-foreground transition-colors duration-300 hover:text-destructive"
+                          className="grid size-10 place-items-center rounded-lg text-muted-foreground transition-colors duration-300 hover:bg-surface-2/60 hover:text-destructive"
                         >
-                          <X className="size-3.5" strokeWidth={1.5} />
+                          <X className="size-4" strokeWidth={1.5} />
                         </button>
                       ) : null}
                     </div>
+
                   </li>
                 );
               })}
