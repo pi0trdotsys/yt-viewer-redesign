@@ -1,15 +1,25 @@
-import { Link2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Link2, CheckCircle2, AlertTriangle, ClipboardPaste, X } from "lucide-react";
 import type { UrlFieldState } from "./types";
 
 interface UrlFieldProps {
   value: string;
   onChange: (value: string) => void;
+  onSubmit?: () => void;
   state?: UrlFieldState;
   disabled?: boolean;
   hint?: string;
+  message?: string;
 }
 
-export function UrlField({ value, onChange, state = "neutral", disabled, hint }: UrlFieldProps) {
+export function UrlField({
+  value,
+  onChange,
+  onSubmit,
+  state = "neutral",
+  disabled,
+  hint,
+  message,
+}: UrlFieldProps) {
   const ringClass =
     state === "valid"
       ? "border-primary/50 shadow-[var(--glow-primary)]"
@@ -17,10 +27,21 @@ export function UrlField({ value, onChange, state = "neutral", disabled, hint }:
         ? "border-destructive/60"
         : "border-border/70 focus-within:border-primary/40";
 
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) onChange(text.trim());
+    } catch {
+      /* brak dostępu do schowka — użytkownik wkleja ręcznie */
+    }
+  };
+
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-2">
-        <span className="label-mono truncate">Źródło</span>
+        <label htmlFor="yt-url" className="label-mono truncate">
+          Wklej link z YouTube
+        </label>
         {hint ? (
           <span className="shrink-0 truncate font-mono text-[10px] tracking-[0.16em] text-muted-foreground/70 sm:text-[11px]">
             {hint}
@@ -29,7 +50,7 @@ export function UrlField({ value, onChange, state = "neutral", disabled, hint }:
       </div>
 
       <div
-        className={`group relative flex items-center gap-3 rounded-xl border bg-surface-2/30 px-4 py-4 transition-all duration-500 ${ringClass}`}
+        className={`group relative flex min-h-14 items-center gap-2 rounded-xl border bg-surface-2/30 px-3 py-2 transition-all duration-500 sm:gap-3 sm:px-4 ${ringClass}`}
       >
         <Link2
           className={`size-4 shrink-0 transition-colors duration-300 ${
@@ -38,19 +59,52 @@ export function UrlField({ value, onChange, state = "neutral", disabled, hint }:
           strokeWidth={1.5}
         />
         <input
+          id="yt-url"
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSubmit?.();
+          }}
           disabled={disabled}
           spellCheck={false}
+          autoComplete="off"
+          inputMode="url"
+          enterKeyHint="go"
           placeholder="https://www.youtube.com/watch?v=..."
           aria-label="Adres URL filmu YouTube"
-          className="w-full min-w-0 bg-transparent font-mono text-[13px] tracking-tight text-foreground outline-none placeholder:text-muted-foreground/40 disabled:opacity-50 sm:text-sm"
+          aria-invalid={state === "invalid"}
+          className="h-10 w-full min-w-0 bg-transparent font-mono text-[13px] tracking-tight text-foreground outline-none placeholder:text-muted-foreground/40 disabled:opacity-50 sm:text-sm"
         />
+        {value ? (
+          <button
+            type="button"
+            aria-label="Wyczyść pole"
+            onClick={() => onChange("")}
+            className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors duration-300 hover:bg-surface-2/60 hover:text-foreground"
+          >
+            <X className="size-4" strokeWidth={1.5} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            aria-label="Wklej ze schowka"
+            onClick={() => void handlePaste()}
+            className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors duration-300 hover:bg-surface-2/60 hover:text-foreground"
+          >
+            <ClipboardPaste className="size-4" strokeWidth={1.5} />
+          </button>
+        )}
         {state === "valid" ? (
-          <CheckCircle2 className="size-4 shrink-0 animate-scale-in text-primary" strokeWidth={1.5} />
+          <CheckCircle2
+            className="size-4 shrink-0 animate-scale-in text-primary"
+            strokeWidth={1.5}
+          />
         ) : null}
         {state === "invalid" ? (
-          <AlertTriangle className="size-4 shrink-0 animate-scale-in text-destructive" strokeWidth={1.5} />
+          <AlertTriangle
+            className="size-4 shrink-0 animate-scale-in text-destructive"
+            strokeWidth={1.5}
+          />
         ) : null}
         <span
           aria-hidden
@@ -59,6 +113,17 @@ export function UrlField({ value, onChange, state = "neutral", disabled, hint }:
           }`}
         />
       </div>
+
+      {message ? (
+        <p
+          role={state === "invalid" ? "alert" : undefined}
+          className={`font-mono text-[11px] leading-relaxed ${
+            state === "invalid" ? "text-destructive" : "text-muted-foreground/70"
+          }`}
+        >
+          {message}
+        </p>
+      ) : null}
     </div>
   );
 }

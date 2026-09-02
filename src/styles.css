@@ -102,7 +102,7 @@
 }
 
 @utility grid-field {
-  /* dwie warstwy — gruba siatka konstrukcyjna + delikatny podział 12px
+  /* dwie warstwy — gruba siatka konstrukcyjna + delikatny podział 8px
      (efekt blueprintu), obie wygaszane maską do środka kadru */
   background-image:
     linear-gradient(var(--grid) 1px, transparent 1px),
@@ -110,11 +110,11 @@
     linear-gradient(color-mix(in oklab, var(--grid) 40%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in oklab, var(--grid) 40%, transparent) 1px, transparent 1px);
   background-size:
-    48px 48px,
-    48px 48px,
-    12px 12px,
-    12px 12px;
-  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black, transparent 75%);
+    32px 32px,
+    32px 32px,
+    8px 8px,
+    8px 8px;
+  mask-image: radial-gradient(ellipse 85% 70% at 50% 0%, black, transparent 80%);
 }
 
 @utility panel {

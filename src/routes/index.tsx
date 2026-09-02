@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Heart } from "lucide-react";
 import { UrlField } from "@/components/downloader/UrlField";
 import { FormatSelect } from "@/components/downloader/FormatSelect";
 import { TransferPanel } from "@/components/downloader/TransferPanel";
@@ -66,6 +67,7 @@ function Index() {
   }, [url]);
 
   const activeJob = jobs.find((j) => j.status === "downloading" || j.status === "converting");
+  const canStart = urlState === "valid" && !activeJob;
 
   const handleFormatChange = (next: MediaFormat) => {
     setFormat(next);
@@ -126,18 +128,10 @@ function Index() {
     <main className="relative min-h-screen overflow-hidden bg-background">
       <div aria-hidden className="grid-field pointer-events-none absolute inset-0 opacity-40" />
       <div className="halo relative mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center px-4 py-12 sm:px-6 sm:py-16 lg:max-w-2xl">
-        <header className="mb-10 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:mb-14">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-primary/40 bg-primary/10 font-mono text-[11px] tracking-tight text-primary">
-              YT
-            </span>
-            <h1 className="truncate font-display text-lg leading-none tracking-tight sm:text-xl">
-              Downloader
-            </h1>
-          </div>
-          <span className="shrink-0 rounded-full border border-border/60 px-3 py-1 font-mono text-[10px] tracking-[0.14em] text-muted-foreground sm:text-[11px]">
-            ~/Downloads
-          </span>
+        <header className="mb-10 flex justify-center sm:mb-14">
+          <h1 className="font-display text-lg leading-none tracking-tight text-foreground/90 sm:text-xl">
+            Downloader
+          </h1>
         </header>
 
         {me ? (
@@ -166,8 +160,18 @@ function Index() {
           <UrlField
             value={url}
             onChange={setUrl}
+            onSubmit={() => {
+              if (canStart) handleStart();
+            }}
             state={urlState}
             hint="watch · shorts · playlist"
+            message={
+              urlState === "invalid"
+                ? "To nie wygląda na poprawny link YouTube (watch, shorts, playlist lub youtu.be)."
+                : urlState === "valid"
+                  ? "Link rozpoznany — wybierz format i jakość."
+                  : "Obsługiwane: youtube.com/watch, /shorts, /playlist oraz youtu.be."
+            }
           />
 
           <FormatSelect
@@ -179,7 +183,16 @@ function Index() {
 
           <DownloadButton
             busy={Boolean(activeJob)}
-            disabled={urlState === "invalid"}
+            disabled={!canStart && !activeJob}
+            hint={
+              activeJob
+                ? undefined
+                : urlState === "neutral"
+                  ? "Wklej link, aby rozpocząć"
+                  : urlState === "invalid"
+                    ? "Popraw link, aby rozpocząć"
+                    : `${format.toUpperCase()} · ${quality}`
+            }
             onStart={handleStart}
             onCancel={() => handleCancel()}
           />
@@ -199,6 +212,14 @@ function Index() {
           {announcement}
         </div>
       </div>
+
+      <footer className="pointer-events-none absolute bottom-0 left-0 right-0 flex justify-center pb-6 pt-10 sm:pb-8">
+        <div className="pointer-events-auto flex items-center gap-1.5 font-mono text-[10px] tracking-[0.22em] text-muted-foreground transition-colors hover:text-foreground sm:text-[11px]">
+          <span>Crafted with</span>
+          <Heart className="size-3 fill-primary/20 text-primary animate-pulse" aria-hidden />
+          <span>by NullPointerStudio</span>
+        </div>
+      </footer>
     </main>
   );
 }
