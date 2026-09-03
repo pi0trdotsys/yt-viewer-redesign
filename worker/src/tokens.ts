@@ -1,17 +1,17 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 /**
- * Token strumienia (kontrakt §9): HMAC-SHA256(jobId, WORKER_TOKEN),
- * weryfikowany w czasie stałym na endpointach /jobs/:id/events i /files/:id.
+ * Token strumienia: HMAC-SHA256(ticketId, WORKER_TOKEN), weryfikowany w
+ * czasie stałym na endpointach /streams/:id/events i /streams/:id.
  */
 
-export function jobStreamToken(jobId: string, secret: string): string {
-  return createHmac("sha256", secret).update(jobId).digest("hex").slice(0, 32);
+export function ticketToken(ticketId: string, secret: string): string {
+  return createHmac("sha256", secret).update(ticketId).digest("hex").slice(0, 32);
 }
 
-export function verifyJobToken(jobId: string, token: string | null, secret: string): boolean {
+export function verifyTicketToken(ticketId: string, token: string | null, secret: string): boolean {
   if (!secret || !token) return false;
-  const expected = jobStreamToken(jobId, secret);
+  const expected = ticketToken(ticketId, secret);
   const a = Buffer.from(expected, "utf8");
   const b = Buffer.from(token, "utf8");
   if (a.length !== b.length) return false;

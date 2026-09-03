@@ -2,10 +2,11 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 
 /**
- * Integracja z yt-dlp: budowanie argumentów, parsowanie postępu
- * (--progress-template + --newline), klasyfikacja błędów na kody DTO
- * (kontrakt §8). yt-dlp/ffmpeg uruchamiane są wyłącznie tutaj — worker
- * jest osobną usługą (Model A), nie warstwą serwerową aplikacji.
+ * Integracja z yt-dlp/ffmpeg: budowanie argumentów, parsowanie postępu
+ * (--progress-template + --newline), klasyfikacja błędów na kody DTO.
+ * yt-dlp/ffmpeg uruchamiane są wyłącznie tutaj i wyłącznie ze strumieniowaniem
+ * do przeglądarki (patrz `streams.ts`) — worker nigdy nie zapisuje wynikowego
+ * pliku na dysk.
  */
 
 export type JobErrorCode = "GEO" | "PRIVATE" | "NOT_FOUND" | "DISK" | "NETWORK" | "AGE" | "UNKNOWN";
@@ -25,8 +26,8 @@ export function ytdlBin(): string {
   return process.env["YT_DLP_BIN"] ?? "yt-dlp";
 }
 
-export function downloadDir(): string {
-  return process.env["DOWNLOAD_DIR"] ?? "/data";
+export function ffmpegBin(): string {
+  return process.env["FFMPEG_BIN"] ?? "ffmpeg";
 }
 
 export function maxDurationSec(): number {
@@ -46,9 +47,21 @@ export function resolveCookiesFile(): string | null {
   return existsSync(path) ? path : null;
 }
 
-function cookieArgs(): string[] {
+export function cookieArgs(): string[] {
   const path = resolveCookiesFile();
   return path ? ["--cookies", path] : [];
+}
+
+/** Wspólne flagi progresu dla wywołań pobierających (nie dla `probe`). */
+export function progressArgs(): string[] {
+  return [
+    "--newline",
+    "--progress",
+    "--no-colors",
+    "--no-mtime",
+    "--progress-template",
+    `download:${PROGRESS_PREFIX}%(progress.downloaded_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s`,
+  ];
 }
 
 /** Faza resolving: metadane pojedynczego wideo lub lista playlisty. */
@@ -105,39 +118,7 @@ export function probe(url: string): Promise<YtdlMetadata> {
   });
 }
 
-/** Argumenty fazy downloading dla formatu/jakości (kontrakt §7). */
-export function buildDownloadArgs(jobId: string, format: string, quality: string): string[] {
-  const outTemplate = `${downloadDir()}/${jobId}.%(ext)s`;
-  const args = [
-    "--no-playlist",
-    "--newline",
-    "--progress",
-    "--no-colors",
-    "--no-mtime",
-    "--progress-template",
-    `download:${PROGRESS_PREFIX}%(progress.downloaded_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s`,
-    ...cookieArgs(),
-    "-o",
-    outTemplate,
-  ];
-
-  if (format === "mp3") {
-    const bitrate = quality.replace(/[^0-9]/g, "") || "320";
-    args.push("-x", "--audio-format", "mp3", "--audio-quality", `${bitrate}K`);
-    return args;
-  }
-
-  const height = quality.replace(/[^0-9]/g, "") || "1080";
-  args.push(
-    "-f",
-    `bv*[height<=${height}]+ba/b[height<=${height}]/b`,
-    "--merge-output-format",
-    "mp4",
-  );
-  return args;
-}
-
-/** Klasyfikacja stderr yt-dlp na kod błędu DTO (kontrakt §8). */
+/** Klasyfikacja stderr yt-dlp/ffmpeg na kod błędu DTO (kontrakt §8). */
 export function classifyError(stderr: string): JobErrorCode {
   const text = stderr.toLowerCase();
   if (/sign in to confirm your age|age.restrict|inappropriate/.test(text)) return "AGE";
@@ -178,13 +159,6 @@ export function parseProgressLine(line: string): ProgressUpdate | null {
   };
 }
 
-/** Czy linia sygnalizuje wejście w fazę postprocessingu (konwersja/mux). */
-export function isPostprocessLine(line: string): boolean {
-  return /^\[(ExtractAudio|Merger|VideoRemuxer|VideoConvertor|VideoPostprocessor|EmbedThumbnail|Metadata)\]/.test(
-    line,
-  );
-}
-
 export interface SpawnedProcess {
   kill(): void;
   readonly exited: Promise<number>;
@@ -192,9 +166,43 @@ export interface SpawnedProcess {
   stderrTail(): string;
 }
 
-/** Uruchamia yt-dlp i strumieniowo raportuje linie stdout/stderr. */
-export function spawnYtdl(args: string[]): SpawnedProcess {
-  const child = spawn(ytdlBin(), args, { stdio: ["ignore", "pipe", "pipe"] });
+/** Dopina line-splitter do strumienia (stdout LUB stderr) — reużywane też
+ *  bezpośrednio dla procesów, gdzie stdout niesie surowe dane binarne
+ *  (wtedy dopinany jest tylko do stderr, patrz `streams.ts`). */
+export function attachLineReader(
+  stream: NodeJS.ReadableStream,
+  onLine: (line: string) => void,
+): void {
+  let pending = "";
+  stream.setEncoding("utf8");
+  stream.on("data", (chunk: string) => {
+    pending += chunk;
+    let index = pending.indexOf("\n");
+    while (index >= 0) {
+      const line = pending.slice(0, index).replace(/\r$/, "");
+      pending = pending.slice(index + 1);
+      onLine(line);
+      index = pending.indexOf("\n");
+    }
+  });
+  // Rejestrowane raz na strumień (poza "data") — inaczej każdy chunk dopinał
+  // kolejny listener "end" (MaxListenersExceededWarning / wyciek pamięci).
+  stream.on("end", () => {
+    if (pending.trim() !== "") {
+      onLine(pending);
+      pending = "";
+    }
+  });
+}
+
+/**
+ * Uruchamia proces (yt-dlp) i strumieniowo raportuje linie z obu strumieni —
+ * do wywołań, gdzie żaden ze strumieni nie niesie danych binarnych (probe,
+ * oraz pobieranie do pliku/FIFO przez `-o <path>`, gdzie tekst postępu leci
+ * normalnym stdout/stderr yt-dlp).
+ */
+export function spawnLineProcess(bin: string, args: string[]): SpawnedProcess {
+  const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
   let stderrTail = "";
   let exitCode: number | null = null;
   let exitResolve: ((code: number) => void) | undefined;
@@ -204,38 +212,13 @@ export function spawnYtdl(args: string[]): SpawnedProcess {
 
   const lineHandlers: Array<(line: string, stream: "out" | "err") => void> = [];
 
-  const attach = (stream: NodeJS.ReadableStream, kind: "out" | "err") => {
-    let pending = "";
-    stream.setEncoding("utf8");
-    stream.on("data", (chunk: string) => {
-      pending += chunk;
-      let index = pending.indexOf("\n");
-      while (index >= 0) {
-        const line = pending.slice(0, index).replace(/\r$/, "");
-        pending = pending.slice(index + 1);
-        if (kind === "err") {
-          stderrTail = (stderrTail + "\n" + line).slice(-8000);
-        }
-        for (const handler of lineHandlers) handler(line, kind);
-        index = pending.indexOf("\n");
-      }
-    });
-    // yt-dlp używa \r dla postępu bez --newline; z --newline to rzadkie, ale
-    // obsłużymy resztkę bufora przy zamknięciu strumienia. Rejestrowane raz
-    // na strumień (poza "data") — inaczej każdy chunk dopinał kolejny
-    // listener "end" (MaxListenersExceededWarning / wyciek pamięci przy
-    // dłuższych pobraniach).
-    stream.on("end", () => {
-      if (pending.trim() !== "") {
-        if (kind === "err") stderrTail = (stderrTail + "\n" + pending).slice(-8000);
-        for (const handler of lineHandlers) handler(pending, kind);
-        pending = "";
-      }
-    });
-  };
-
-  attach(child.stdout!, "out");
-  attach(child.stderr!, "err");
+  attachLineReader(child.stdout!, (line) => {
+    for (const handler of lineHandlers) handler(line, "out");
+  });
+  attachLineReader(child.stderr!, (line) => {
+    stderrTail = (stderrTail + "\n" + line).slice(-8000);
+    for (const handler of lineHandlers) handler(line, "err");
+  });
 
   child.on("error", (error: unknown) => {
     stderrTail = (stderrTail + "\n" + String(error)).slice(-8000);
