@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowDownToLine, ChevronDown, RotateCcw, X } from "lucide-react";
+import { ChevronDown, RotateCcw, X } from "lucide-react";
 import { STATUS_LABEL, formatDuration, type DownloadJob } from "./types";
 
 interface QueueListProps {
@@ -7,15 +7,14 @@ interface QueueListProps {
   defaultOpen?: boolean;
   onCancel?: (jobId: string) => void;
   onRetry?: (jobId: string) => void;
-  onReveal?: (job: DownloadJob) => void;
   onClearFinished?: () => void;
 }
 
 const DOT: Record<DownloadJob["status"], string> = {
   idle: "bg-muted-foreground/40",
+  queued: "bg-muted-foreground/40",
   resolving: "bg-foreground",
   downloading: "bg-primary",
-  converting: "bg-foreground",
   done: "bg-muted-foreground/40",
   error: "bg-destructive",
   canceled: "bg-muted-foreground/40",
@@ -26,12 +25,11 @@ export function QueueList({
   defaultOpen = true,
   onCancel,
   onRetry,
-  onReveal,
   onClearFinished,
 }: QueueListProps) {
   const [open, setOpen] = useState(defaultOpen);
   const activeCount = jobs.filter(
-    (j) => j.status === "downloading" || j.status === "converting",
+    (j) => j.status === "downloading" || j.status === "resolving",
   ).length;
 
   return (
@@ -73,7 +71,7 @@ export function QueueList({
           ) : (
             <ul className="space-y-2">
               {jobs.map((job) => {
-                const busy = job.status === "downloading" || job.status === "converting";
+                const busy = job.status === "downloading" || job.status === "resolving";
                 return (
                   <li
                     key={job.id}
@@ -101,17 +99,6 @@ export function QueueList({
                       ) : null}
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
-                      {job.status === "done" ? (
-                        <button
-                          type="button"
-                          aria-label="Pobierz plik"
-                          title="Pobierz plik"
-                          onClick={() => onReveal?.(job)}
-                          className="grid size-10 place-items-center rounded-lg text-muted-foreground transition-colors duration-300 hover:bg-surface-2/60 hover:text-primary"
-                        >
-                          <ArrowDownToLine className="size-4" strokeWidth={1.5} />
-                        </button>
-                      ) : null}
                       {job.status === "error" ? (
                         <button
                           type="button"

@@ -1,19 +1,36 @@
 import type { DownloadJob } from "@/components/downloader/types";
 
-import { jobDtoSchema, jobListDtoSchema, type JobDto, type StartInput } from "./types.shared";
+import {
+  createStreamResponseSchema,
+  streamDtoSchema,
+  type CreateStreamResponse,
+  type JobErrorCode,
+  type StartInput,
+  type StreamDto,
+} from "./types.shared";
+
+type VideoTicket = Extract<CreateStreamResponse, { kind: "video" }>;
 
 /**
- * Klient silnika pobierania (kontrakt §4).
+ * Klient silnika pobierania — model "strumień + status SSE" (patrz plan,
+ * decyzja usera). Zero serwerowej kolejki/joba: `POST /api/public/streams`
+ * zakłada jednorazowy bilet, SSE `.../events` niesie postęp, a właściwe
+ * pobranie leci wprost do przeglądarki przez ukryty `<a href="…">` — worker
+ * strumieniuje bajty prosto z yt-dlp/ffmpeg, nic nie ląduje na serwerze.
  *
- * Transport: gateway `/api/public/*` (same-origin; Basic Auth dołącza
- * przeglądarka). Postęp: SSE per aktywny job (backoff 1s→2s→5s→10s, maks. 5
- * prób — kontrakt §9), z fallbackiem pollingu `list()` co 4 s, który pokrywa
- * też joby z playlisty i stan po restarcie workera.
+ * Historia/kolejka żyje wyłącznie po stronie klienta (persystencja w
+ * localStorage, patrz useDownloader.ts) — nie ma czego synchronizować z
+ * serwerem po restarcie karty, bilety są krótkotrwałe i jednorazowe.
+ *
+ * Playlisty: `POST /streams` na URL playlisty zwraca listę pozycji (same
+ * URL-e, bez metadanych) zamiast biletu. Klient trzyma je jako lokalną
+ * kolejkę (`queued`) i odpala właściwy `POST /streams` (świeży probe +
+ * bilet) dopiero gdy przychodzi kolej danej pozycji — inaczej bilety
+ * dalszych pozycji wygasałyby (TTL) zanim w ogóle by ruszyły.
  */
 
-const TERMINAL_STATUSES = new Set(["done", "error", "canceled"]);
+const TERMINAL_STATUSES = new Set<DownloadJob["status"]>(["done", "error", "canceled"]);
 const SSE_RECONNECT_DELAYS_MS = [1000, 2000, 5000, 10000];
-const POLL_INTERVAL_MS = 4000;
 
 /** Mapowanie kod → komunikat PL (kontrakt §8 — jedno miejsce po stronie klienta). */
 const ERROR_MESSAGES: Record<string, string> = {
@@ -26,27 +43,66 @@ const ERROR_MESSAGES: Record<string, string> = {
   UNKNOWN: "Nie udało się pobrać pliku",
 };
 
-function isTerminal(status: JobDto["status"]): boolean {
+function isTerminal(status: DownloadJob["status"]): boolean {
   return TERMINAL_STATUSES.has(status);
 }
 
-function toUiJob(dto: JobDto): DownloadJob {
+/** Stan lokalnego rekordu — nadbiór `StreamDto` o dane niesione tylko przez
+ *  klienta (wejście startowe + uchwyt bieżącego biletu). */
+interface LocalRecord {
+  /** Stabilne id po stronie klienta — NIE id biletu (ten ostatni bywa
+   *  tworzony z opóźnieniem dla pozycji playlisty, patrz `pumpQueue`). */
+  id: string;
+  ticketId?: string | undefined;
+  token?: string | undefined;
+  url: string;
+  format: StartInput["format"];
+  quality: string;
+  status: DownloadJob["status"];
+  progress: number;
+  title?: string | undefined;
+  durationSec?: number | undefined;
+  thumbnailUrl?: string | undefined;
+  speedBytesPerSec?: number | undefined;
+  etaSec?: number | undefined;
+  downloadedBytes?: number | undefined;
+  totalBytes?: number | undefined;
+  error?: string | undefined;
+  errorCode?: JobErrorCode | undefined;
+}
+
+function toUiJob(record: LocalRecord): DownloadJob {
   return {
-    id: dto.id,
-    url: dto.url,
-    title: dto.title,
-    thumbnailUrl: dto.thumbnailUrl,
-    durationSec: dto.durationSec,
-    format: dto.format,
-    quality: dto.quality,
+    id: record.id,
+    url: record.url,
+    title: record.title,
+    thumbnailUrl: record.thumbnailUrl,
+    durationSec: record.durationSec,
+    format: record.format,
+    quality: record.quality,
+    status: record.status,
+    progress: record.progress,
+    speedBytesPerSec: record.speedBytesPerSec,
+    etaSec: record.etaSec,
+    downloadedBytes: record.downloadedBytes,
+    totalBytes: record.totalBytes,
+    error: record.errorCode ? (ERROR_MESSAGES[record.errorCode] ?? record.error) : record.error,
+  };
+}
+
+function dtoPatch(dto: StreamDto): Partial<LocalRecord> {
+  return {
     status: dto.status,
     progress: dto.progress,
+    title: dto.title,
+    durationSec: dto.durationSec,
+    thumbnailUrl: dto.thumbnailUrl,
     speedBytesPerSec: dto.speedBytesPerSec,
     etaSec: dto.etaSec,
     downloadedBytes: dto.downloadedBytes,
     totalBytes: dto.totalBytes,
-    outputPath: dto.outputPath,
-    error: dto.errorCode ? (ERROR_MESSAGES[dto.errorCode] ?? dto.error) : dto.error,
+    error: dto.error,
+    errorCode: dto.errorCode,
   };
 }
 
@@ -62,151 +118,274 @@ async function readError(res: Response): Promise<Error> {
   return new Error(`Żądanie nie powiodło się (${res.status})`);
 }
 
+/** Zapis do localStorage — bez `ticketId`/`token`: bilety są jednorazowe i
+ *  krótkotrwałe, po restarcie karty i tak nie da się ich wznowić (patrz
+ *  `importDtos`), więc trzymanie ich w historii tylko niepotrzebnie
+ *  wynosiłoby sekret poza pamięć procesu. */
+export interface PersistedRecord {
+  id: string;
+  url: string;
+  format: StartInput["format"];
+  quality: string;
+  status: DownloadJob["status"];
+  progress: number;
+  title?: string | undefined;
+  durationSec?: number | undefined;
+  thumbnailUrl?: string | undefined;
+  error?: string | undefined;
+  errorCode?: JobErrorCode | undefined;
+}
+
 export class HttpDownloaderEngine {
-  private dtos = new Map<string, JobDto>();
+  private records = new Map<string, LocalRecord>();
+  private order: string[] = [];
   private listeners = new Set<(job: DownloadJob) => void>();
   private sources = new Map<string, EventSource>();
   private reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private sseFailures = new Map<string, number>();
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
-  private polling = false;
+  /** Kolejka lokalna (pozycje playlisty czekające na swój `POST /streams`). */
+  private pendingQueue: string[] = [];
+  /** Rekord aktualnie "aktywny" (trwa jego bilet/pobranie) — steruje pompą. */
+  private activeId: string | null = null;
 
-  // --- kontrakt: start/cancel/retry/list/subscribe -------------------------
+  // --- kontrakt: start/cancel/retry/subscribe -------------------------------
 
-  async start(input: StartInput): Promise<string> {
-    const res = await fetch("/api/public/jobs", {
+  async start(input: StartInput): Promise<void> {
+    const data = await this.createStreamTicket(input);
+    if (data.kind === "playlist") {
+      for (const url of data.entries) {
+        this.queuePlaceholder({ url, format: input.format, quality: input.quality });
+      }
+      return;
+    }
+    const record = this.recordFromTicket(crypto.randomUUID(), input, data);
+    this.upsert(record);
+    this.beginDownload(record);
+  }
+
+  async cancel(recordId: string): Promise<void> {
+    const record = this.records.get(recordId);
+    if (!record) return;
+    this.pendingQueue = this.pendingQueue.filter((id) => id !== recordId);
+    if (!isTerminal(record.status)) {
+      this.upsert({ ...record, status: "canceled" });
+    }
+    this.closeStream(recordId);
+    if (record.ticketId) {
+      try {
+        await fetch(`/api/public/streams/${encodeURIComponent(record.ticketId)}`, {
+          method: "DELETE",
+        });
+      } catch {
+        // best-effort — worker i tak posprząta po TTL/rozłączeniu
+      }
+    }
+    if (this.activeId === recordId) {
+      this.activeId = null;
+      this.pumpQueue();
+    }
+  }
+
+  async retry(recordId: string): Promise<void> {
+    const record = this.records.get(recordId);
+    if (!record) return;
+    await this.start({ url: record.url, format: record.format, quality: record.quality });
+  }
+
+  subscribe(cb: (job: DownloadJob) => void): () => void {
+    this.listeners.add(cb);
+    for (const id of this.order) {
+      const record = this.records.get(id);
+      if (record) cb(toUiJob(record));
+    }
+    return () => {
+      this.listeners.delete(cb);
+    };
+  }
+
+  // --- rozszerzenia poza interfejs kontraktu (persystencja) -----------------
+
+  snapshot(): DownloadJob[] {
+    return this.order
+      .map((id) => this.records.get(id))
+      .filter((r): r is LocalRecord => !!r)
+      .map(toUiJob);
+  }
+
+  exportDtos(): PersistedRecord[] {
+    return this.order
+      .map((id) => this.records.get(id))
+      .filter((r): r is LocalRecord => !!r)
+      .slice(-100)
+      .map((r) => ({
+        id: r.id,
+        url: r.url,
+        format: r.format,
+        quality: r.quality,
+        status: r.status,
+        progress: r.progress,
+        title: r.title,
+        durationSec: r.durationSec,
+        thumbnailUrl: r.thumbnailUrl,
+        error: r.error,
+        errorCode: r.errorCode,
+      }));
+  }
+
+  /** Przywraca historię z localStorage. Zadania nieterminalne (przerwane
+   *  zamknięciem karty — bilet i tak już nie do wznowienia) oznaczane jako
+   *  `canceled`; podejrzane rekordy pomijane po cichu (§10). */
+  importDtos(raw: unknown): void {
+    if (!Array.isArray(raw)) return;
+    for (const candidate of raw as unknown[]) {
+      if (!candidate || typeof candidate !== "object") continue;
+      const c = candidate as Record<string, unknown>;
+      if (typeof c["id"] !== "string" || typeof c["url"] !== "string") continue;
+      if (c["format"] !== "mp3" && c["format"] !== "mp4") continue;
+      if (typeof c["quality"] !== "string") continue;
+      const status =
+        typeof c["status"] === "string" ? (c["status"] as DownloadJob["status"]) : "canceled";
+      const record: LocalRecord = {
+        id: c["id"],
+        url: c["url"],
+        format: c["format"],
+        quality: c["quality"],
+        status: isTerminal(status) ? status : "canceled",
+        progress: typeof c["progress"] === "number" ? c["progress"] : 0,
+        title: typeof c["title"] === "string" ? c["title"] : undefined,
+        durationSec: typeof c["durationSec"] === "number" ? c["durationSec"] : undefined,
+        thumbnailUrl: typeof c["thumbnailUrl"] === "string" ? c["thumbnailUrl"] : undefined,
+        error: typeof c["error"] === "string" ? c["error"] : undefined,
+        errorCode:
+          typeof c["errorCode"] === "string" ? (c["errorCode"] as JobErrorCode) : undefined,
+      };
+      this.upsertSilent(record);
+    }
+  }
+
+  clearFinished(): void {
+    for (const id of [...this.order]) {
+      const record = this.records.get(id);
+      if (record && isTerminal(record.status)) {
+        this.records.delete(id);
+        this.order = this.order.filter((x) => x !== id);
+      }
+    }
+  }
+
+  // --- wewnętrzne: kolejkowanie playlist -------------------------------------
+
+  private queuePlaceholder(input: StartInput): void {
+    const record: LocalRecord = {
+      id: crypto.randomUUID(),
+      url: input.url,
+      format: input.format,
+      quality: input.quality,
+      status: "queued",
+      progress: 0,
+    };
+    this.upsert(record);
+    this.pendingQueue.push(record.id);
+    this.pumpQueue();
+  }
+
+  private pumpQueue(): void {
+    if (this.activeId) return;
+    const nextId = this.pendingQueue.shift();
+    if (!nextId) return;
+    const record = this.records.get(nextId);
+    if (!record) {
+      this.pumpQueue();
+      return;
+    }
+    this.activeId = nextId;
+    void this.resolveAndDownload(record);
+  }
+
+  private async resolveAndDownload(record: LocalRecord): Promise<void> {
+    let data;
+    try {
+      data = await this.createStreamTicket({
+        url: record.url,
+        format: record.format,
+        quality: record.quality,
+      });
+    } catch (error) {
+      this.upsert({
+        ...record,
+        status: "error",
+        error: error instanceof Error ? error.message : String(error),
+      });
+      this.activeId = null;
+      this.pumpQueue();
+      return;
+    }
+    if (data.kind === "playlist") {
+      // Playlista wewnątrz pozycji playlisty nie powinna się zdarzyć —
+      // traktujemy jako błąd tej pozycji, reszta kolejki jedzie dalej.
+      this.upsert({ ...record, status: "error", error: "Nieobsługiwany link (playlista)" });
+      this.activeId = null;
+      this.pumpQueue();
+      return;
+    }
+    const merged = this.recordFromTicket(record.id, record, data);
+    this.upsert(merged);
+    this.beginDownload(merged);
+  }
+
+  private beginDownload(record: LocalRecord): void {
+    if (!record.ticketId || !record.token) return;
+    this.activeId = record.id;
+    this.openStream(record);
+    this.triggerAnchorDownload(record.ticketId, record.token);
+  }
+
+  private recordFromTicket(
+    id: string,
+    input: Pick<StartInput, "url" | "format" | "quality">,
+    data: VideoTicket,
+  ): LocalRecord {
+    return {
+      id,
+      ticketId: data.id,
+      token: data.token,
+      url: input.url,
+      format: input.format,
+      quality: input.quality,
+      status: data.status,
+      progress: data.progress,
+      title: data.title,
+      durationSec: data.durationSec,
+      thumbnailUrl: data.thumbnailUrl,
+    };
+  }
+
+  private async createStreamTicket(input: StartInput) {
+    const res = await fetch("/api/public/streams", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
     });
     if (!res.ok) throw await readError(res);
-    const data = jobListDtoSchema.parse(await res.json());
-    const first = data.jobs[0];
-    if (!first) throw new Error("Worker nie utworzył zadania");
-    for (const dto of data.jobs) this.emit(dto);
-    this.refreshStreams();
-    this.ensurePolling();
-    return first.id;
+    return createStreamResponseSchema.parse(await res.json());
   }
 
-  async cancel(jobId: string): Promise<void> {
-    // Optymistycznie: UI natychmiast pokazuje "Anulowano"; serwer potwierdzi.
-    const dto = this.dtos.get(jobId);
-    if (dto && !isTerminal(dto.status)) {
-      this.emit({ ...dto, status: "canceled" });
-    }
-    try {
-      await fetch(`/api/public/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" });
-    } catch {
-      // polling/SSE doprecyzuje stan
-    }
+  private triggerAnchorDownload(ticketId: string, token: string): void {
+    const url = `/api/public/streams/${encodeURIComponent(ticketId)}?token=${encodeURIComponent(token)}`;
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.rel = "noopener";
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
   }
 
-  async retry(jobId: string): Promise<string> {
-    const res = await fetch(`/api/public/jobs/${encodeURIComponent(jobId)}/retry`, {
-      method: "POST",
-    });
-    if (!res.ok) throw await readError(res);
-    const data = jobListDtoSchema.parse(await res.json());
-    const first = data.jobs[0];
-    if (!first) throw new Error("Nie udało się ponowić zadania");
-    for (const dto of data.jobs) this.emit(dto);
-    this.ensurePolling();
-    return first.id;
-  }
+  // --- wewnętrzne: emisje/SSE -------------------------------------------------
 
-  async list(): Promise<DownloadJob[]> {
-    const res = await fetch("/api/public/jobs");
-    if (!res.ok) throw await readError(res);
-    const data = jobListDtoSchema.parse(await res.json());
-    return data.jobs.map(toUiJob);
-  }
-
-  subscribe(cb: (job: DownloadJob) => void): () => void {
-    this.listeners.add(cb);
-    // Natychmiastowa reprodukcja znanego stanu.
-    for (const dto of this.dtos.values()) cb(toUiJob(dto));
-    this.refreshStreams();
-    this.ensurePolling();
-
-    return () => {
-      this.listeners.delete(cb);
-      if (this.listeners.size === 0) {
-        // Kontrakt §4: brak subskrybentów → zamykamy transport.
-        this.teardownTransports();
-      }
-    };
-  }
-
-  // --- rozszerzenia poza interfejs kontraktu (persystencja / pobieranie) ---
-
-  /** Aktualny, lokalnie znany stan wszystkich jobów (UI). */
-  snapshot(): DownloadJob[] {
-    return [...this.dtos.values()].map(toUiJob);
-  }
-
-  /** URL pobierania pliku dla ukończonego joba (z tokenem) albo null. */
-  getDownloadUrl(jobId: string): string | null {
-    const dto = this.dtos.get(jobId);
-    if (!dto || dto.status !== "done" || !dto.hasFile || !dto.streamToken) return null;
-    return `/api/public/files/${encodeURIComponent(dto.id)}?token=${encodeURIComponent(dto.streamToken)}`;
-  }
-
-  /** DTO do persystencji w localStorage (zawiera streamToken). */
-  exportDtos(): JobDto[] {
-    return [...this.dtos.values()];
-  }
-
-  /**
-   * Przywraca DTO z localStorage. Rekordy niezgodne ze schematem są odrzucane
-   * (§10); joby nieterminalne oznaczane jako `canceled`, chyba że serwer
-   * potwierdzi ich życie w `syncFromServer()`.
-   */
-  importDtos(dtos: unknown): void {
-    if (!Array.isArray(dtos)) return;
-    for (const candidate of dtos) {
-      const parsed = jobDtoSchema.safeParse(candidate);
-      if (!parsed.success) continue;
-      const dto = parsed.data;
-      this.emit(isTerminal(dto.status) ? dto : { ...dto, status: "canceled" as const });
-    }
-  }
-
-  /** Usuwa z pamięci joby terminalne (czyszczenie historii). */
-  clearFinished(): void {
-    for (const [id, dto] of this.dtos) {
-      if (isTerminal(dto.status)) this.dtos.delete(id);
-    }
-  }
-
-  /** Synchronizacja z serwerem — źródło prawdy po restarcie / dla playlist. */
-  async syncFromServer(): Promise<void> {
-    let data;
-    try {
-      const res = await fetch("/api/public/jobs");
-      if (!res.ok) return;
-      data = jobListDtoSchema.parse(await res.json());
-    } catch {
-      return; // worker chwilowo niedostępny — spróbujemy przy następnym ticku
-    }
-    const serverIds = new Set<string>();
-    for (const dto of data.jobs) {
-      serverIds.add(dto.id);
-      this.emit(dto);
-    }
-    for (const local of [...this.dtos.values()]) {
-      if (!serverIds.has(local.id) && !isTerminal(local.status)) {
-        this.emit({ ...local, status: "canceled" as const });
-      }
-    }
-    this.refreshStreams();
-  }
-
-  // --- wewnętrzne -----------------------------------------------------------
-
-  private emit(dto: JobDto): void {
-    this.dtos.set(dto.id, dto);
-    const ui = toUiJob(dto);
+  private upsert(record: LocalRecord): void {
+    this.upsertSilent(record);
+    const ui = toUiJob(record);
     for (const listener of this.listeners) {
       try {
         listener(ui);
@@ -216,51 +395,35 @@ export class HttpDownloaderEngine {
     }
   }
 
-  private ensurePolling(): void {
-    if (this.polling || this.listeners.size === 0) return;
-    this.polling = true;
-    const tick = async (): Promise<void> => {
-      const hasActive = [...this.dtos.values()].some((d) => !isTerminal(d.status));
-      if (!hasActive) {
-        this.stopPolling();
-        return;
-      }
-      await this.syncFromServer();
-    };
-    this.pollTimer = setInterval(() => void tick(), POLL_INTERVAL_MS);
-    void tick();
+  /** Jak `upsert`, ale bez emisji do subskrybentów — do importu historii
+   *  przy hydratacji (jeszcze bez montowania odbiorców). */
+  private upsertSilent(record: LocalRecord): void {
+    if (!this.records.has(record.id)) this.order.push(record.id);
+    this.records.set(record.id, record);
   }
 
-  private stopPolling(): void {
-    if (this.pollTimer) clearInterval(this.pollTimer);
-    this.pollTimer = null;
-    this.polling = false;
-  }
-
-  private refreshStreams(): void {
-    for (const dto of this.dtos.values()) {
-      if (isTerminal(dto.status)) {
-        this.closeStream(dto.id);
-        continue;
-      }
-      if (!dto.streamToken || this.sources.has(dto.id)) continue;
-      this.openStream(dto.id, dto.streamToken);
-    }
-  }
-
-  private openStream(jobId: string, token: string): void {
+  private openStream(record: LocalRecord): void {
+    if (!record.ticketId || !record.token || this.sources.has(record.id)) return;
+    const ticketId = record.ticketId;
+    const token = record.token;
     const source = new EventSource(
-      `/api/public/jobs/${encodeURIComponent(jobId)}/events?token=${encodeURIComponent(token)}`,
+      `/api/public/streams/${encodeURIComponent(ticketId)}/events?token=${encodeURIComponent(token)}`,
     );
 
-    source.addEventListener("job", (event) => {
+    source.addEventListener("stream", (event) => {
       try {
-        const dto = jobDtoSchema.parse(JSON.parse((event as MessageEvent<string>).data));
-        this.sseFailures.set(jobId, 0);
-        this.emit(dto);
-        if (isTerminal(dto.status)) {
-          source.close();
-          this.sources.delete(jobId);
+        const dto = streamDtoSchema.parse(JSON.parse((event as MessageEvent<string>).data));
+        this.sseFailures.set(record.id, 0);
+        const current = this.records.get(record.id);
+        if (!current) return;
+        const merged = { ...current, ...dtoPatch(dto) };
+        this.upsert(merged);
+        if (TERMINAL_STATUSES.has(merged.status)) {
+          this.closeStream(record.id);
+          if (this.activeId === record.id) {
+            this.activeId = null;
+            this.pumpQueue();
+          }
         }
       } catch {
         // niepoprawna ramka — ignoruj, kolejne przyjdą
@@ -269,44 +432,41 @@ export class HttpDownloaderEngine {
 
     source.onerror = () => {
       source.close();
-      this.sources.delete(jobId);
-      const attempts = (this.sseFailures.get(jobId) ?? 0) + 1;
-      this.sseFailures.set(jobId, attempts);
+      this.sources.delete(record.id);
+      const attempts = (this.sseFailures.get(record.id) ?? 0) + 1;
+      this.sseFailures.set(record.id, attempts);
       if (attempts > SSE_RECONNECT_DELAYS_MS.length) {
-        // Kontrakt §9: po wyczerpaniu prób — pozostaje polling.
+        // Kontrakt §9: po wyczerpaniu prób przestajemy dobijać się o
+        // postęp — sam transfer (jeśli już ruszył) leci dalej niezależnie
+        // w przeglądarce, tylko UI nie dostanie już aktualizacji na żywo.
         return;
       }
       const delay =
         SSE_RECONNECT_DELAYS_MS[Math.min(attempts - 1, SSE_RECONNECT_DELAYS_MS.length - 1)]!;
       const timer = setTimeout(() => {
-        this.reconnectTimers.delete(jobId);
-        const dto = this.dtos.get(jobId);
-        if (dto && !isTerminal(dto.status) && this.listeners.size > 0 && dto.streamToken) {
-          this.openStream(jobId, dto.streamToken);
+        this.reconnectTimers.delete(record.id);
+        const current = this.records.get(record.id);
+        if (current && !isTerminal(current.status) && this.listeners.size > 0) {
+          this.openStream(current);
         }
       }, delay);
-      this.reconnectTimers.set(jobId, timer);
+      this.reconnectTimers.set(record.id, timer);
     };
 
-    this.sources.set(jobId, source);
+    this.sources.set(record.id, source);
   }
 
-  private closeStream(jobId: string): void {
-    const source = this.sources.get(jobId);
+  private closeStream(recordId: string): void {
+    const source = this.sources.get(recordId);
     if (source) {
       source.close();
-      this.sources.delete(jobId);
+      this.sources.delete(recordId);
     }
-    const timer = this.reconnectTimers.get(jobId);
+    const timer = this.reconnectTimers.get(recordId);
     if (timer) {
       clearTimeout(timer);
-      this.reconnectTimers.delete(jobId);
+      this.reconnectTimers.delete(recordId);
     }
-  }
-
-  private teardownTransports(): void {
-    for (const id of [...this.sources.keys()]) this.closeStream(id);
-    this.stopPolling();
   }
 }
 

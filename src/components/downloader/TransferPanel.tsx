@@ -19,8 +19,8 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 export function TransferPanel({ job, onCancel }: TransferPanelProps) {
   const progress = job?.progress ?? 0;
-  const active = job?.status === "downloading" || job?.status === "converting";
-  const indeterminate = job?.status === "resolving";
+  const active = job?.status === "downloading";
+  const indeterminate = job?.status === "resolving" || job?.status === "queued";
 
   return (
     <div className="glass relative space-y-6 rounded-2xl p-5 sm:p-7">

@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 import { Heart } from "lucide-react";
 import { UrlField } from "@/components/downloader/UrlField";
 import { FormatSelect } from "@/components/downloader/FormatSelect";
@@ -9,7 +8,6 @@ import { DownloadButton } from "@/components/downloader/DownloadButton";
 import { QueueList } from "@/components/downloader/QueueList";
 import {
   DEFAULT_QUALITY,
-  type DownloadJob,
   type MediaFormat,
   type UrlFieldState,
 } from "@/components/downloader/types";
@@ -43,7 +41,7 @@ function Index() {
   const [url, setUrl] = useState("");
   const [format, setFormat] = useState<MediaFormat>("mp4");
   const [quality, setQuality] = useState<string>(DEFAULT_QUALITY.mp4);
-  const { jobs, start, cancel, retry, clearFinished, getDownloadUrl } = useDownloader();
+  const { jobs, start, cancel, retry, clearFinished } = useDownloader();
   const [me, setMe] = useState<PublicUser | null>(null);
 
   // Hydration-safe: kim jesteśmy (spójne z odczytem localStorage w useDownloader).
@@ -66,7 +64,7 @@ function Index() {
     return parseYoutubeUrl(url) ? "valid" : "invalid";
   }, [url]);
 
-  const activeJob = jobs.find((j) => j.status === "downloading" || j.status === "converting");
+  const activeJob = jobs.find((j) => j.status === "downloading" || j.status === "resolving");
   const canStart = urlState === "valid" && !activeJob;
 
   const handleFormatChange = (next: MediaFormat) => {
@@ -87,38 +85,10 @@ function Index() {
     void retry(jobId);
   };
 
-  // Pliki znikają z serwera zaraz po pobraniu (albo po krótkim TTL, jeśli
-  // nikt ich nie odbierze) — HEAD sprawdza dostępność, żeby spóźnione
-  // kliknięcie kończyło się czytelnym komunikatem, a nie nawigacją karty
-  // na surowy JSON błędu z workera.
-  const handleReveal = async (job: DownloadJob) => {
-    const downloadUrl = getDownloadUrl(job.id);
-    if (!downloadUrl) {
-      toast.error("Plik niedostępny — spróbuj pobrać ponownie");
-      return;
-    }
-    try {
-      const check = await fetch(downloadUrl, { method: "HEAD" });
-      if (!check.ok) {
-        toast.error("Plik już nie jest dostępny na serwerze — uruchom pobieranie ponownie");
-        return;
-      }
-    } catch {
-      toast.error("Nie udało się połączyć z serwerem");
-      return;
-    }
-    const anchor = document.createElement("a");
-    anchor.href = downloadUrl;
-    anchor.rel = "noopener";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-  };
-
   // Ogłoszenia zmian statusu dla czytników ekranu (kontrakt §12).
   const announcement = useMemo(() => {
     const active = jobs.filter(
-      (j) => j.status === "downloading" || j.status === "converting",
+      (j) => j.status === "downloading" || j.status === "resolving",
     ).length;
     const done = jobs.filter((j) => j.status === "done").length;
     return `Aktywne pobierania: ${active}. Ukończone: ${done}.`;
@@ -203,7 +173,6 @@ function Index() {
             jobs={jobs}
             onCancel={handleCancel}
             onRetry={handleRetry}
-            onReveal={handleReveal}
             onClearFinished={clearFinished}
           />
         </div>

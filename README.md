@@ -52,8 +52,10 @@ renderuje.
 - **yt-dlp + ffmpeg + deno** w osobnym, izolowanym workerze (Bun) — deno
   jest wymagany przez yt-dlp do deszyfrowania sygnatur YouTube (n-param);
   opcjonalne wsparcie `cookies.txt`, gdy YouTube blokuje pobieranie
-- **Bez trwałego magazynu plików** — plik trafia do przeglądarki i jest
-  od razu kasowany z dysku serwera; nieodebrane znikają po `FILE_TTL_SEC`
+- **Bez trwałego magazynu plików** — plik NIGDY nie trafia na dysk serwera:
+  yt-dlp/ffmpeg strumieniują wynik prosto do odpowiedzi HTTP przeglądarki
+  (jedyny "dotyk dysku" to FIFO w katalogu tymczasowym, sprzątane od razu po
+  zakończeniu transferu); nieużyty bilet pobrania wygasa po `STREAM_TICKET_TTL_SEC`
 - Zero zależności runtime poza Dockerem — wszystko wbudowane w obrazy,
   `git pull && docker compose up -d --build` i gotowe
 
@@ -153,11 +155,11 @@ aplikacja pod `127.0.0.1:3000` (za ekranem logowania). Pliki trafiają do
 - **izolacja per-user** — worker zna właściciela każdego zadania (nagłówek
   `X-User-Id` z gatewaya); jedno konto nie widzi, nie anuluje ani nie
   pobiera plików drugiego
-- **pliki nie są trwałym magazynem** — plik trafia do przeglądarki i jest
-  od razu kasowany z dysku serwera; nieodebrane (nikt nie kliknął pobierz)
-  są sprzątane po `FILE_TTL_SEC` (domyślnie 30 min)
+- **pliki nigdy nie trafiają na dysk serwera** — yt-dlp/ffmpeg strumieniują
+  wynik prosto do przeglądarki; nieużyty bilet pobrania wygasa po
+  `STREAM_TICKET_TTL_SEC` (domyślnie 120 s)
 - **WORKER_TOKEN** — app → worker, port workera nie publikowany
-- **token joba** — HMAC (SHA-256) chroni SSE i pobieranie pliku
+- **token biletu** — HMAC (SHA-256), jednorazowy; chroni SSE i pobieranie
 - **limity** — równoległe zadania, długość playlisty, długość filmu,
   rate-limit prób logowania
 - **COOKIES_FILE** (opcjonalnie) — plik cookies.txt dla yt-dlp, gdy YouTube

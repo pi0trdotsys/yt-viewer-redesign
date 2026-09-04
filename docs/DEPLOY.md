@@ -47,8 +47,9 @@ Uzupełnij w `.env`:
 - `TUNNEL_TOKEN` — token tunelu (krok 4),
 - opcjonalnie `COOKIES_FILE` — patrz komentarz w `.env.example`, jeśli
   YouTube blokuje pobieranie ("Sign in to confirm you're not a bot"),
-- opcjonalnie `FILE_TTL_SEC` (domyślnie `1800` = 30 min) — po tylu
-  sekundach worker kasuje z dysku plik, którego nikt nie odebrał.
+- opcjonalnie `STREAM_TICKET_TTL_SEC` (domyślnie `120`) — po tylu sekundach
+  wygasa nieużyty bilet pobrania (np. zamknięta karta między "Pobierz" a
+  startem transferu); pliki wynikowe nigdy nie trafiają na dysk workera.
 
 ## 4. Cloudflare Tunnel + subdomena
 
@@ -98,24 +99,22 @@ w `docker compose logs cloudflared`). Restart każe mu rozwiązać `app` na nowo
 docker compose ps
 docker compose logs --tail=100 app
 docker compose logs --tail=100 worker
-ls -la downloads/                 # powinno być prawie zawsze puste — patrz niżej
 ```
 
-## 8. Sprzątanie `downloads/`
+## 8. Migracja ze starszej wersji (plikowy model pobierania)
 
-Od wersji z automatycznym kasowaniem plików po pobraniu, `./downloads/`
-powinno w praktyce świecić pustką — plik trafia tam tylko na czas trwania
-transferu do przeglądarki i jest kasowany zaraz po jego zakończeniu
-(nieodebrane znikają same po `FILE_TTL_SEC`). Jeśli katalog zdążył się
-zapełnić przed tą zmianą (albo z jobów przerwanych w trakcie — `*.part`),
-posprzątaj go ręcznie jednorazowo:
+Wersje sprzed przepisania na czysty streaming zapisywały pliki tymczasowo w
+`./downloads/` na hoście. Obecny worker nigdy nie dotyka dysku (poza FIFO w
+katalogu tymczasowym kontenera, sprzątanym natychmiast po transferze) — jeśli
+migrujesz starszy deploy, usuń nieaktualny wolumen i jednorazowo posprzątaj
+resztki:
 
 ```sh
-rm -f ~/yt-viewer-redesign/downloads/*
+rm -rf ~/yt-viewer-redesign/downloads/
 ```
 
-Bezpieczne — katalog służy wyłącznie jako tymczasowy bufor workera, appka
-sama go nigdzie indziej nie odczytuje.
+`docker-compose.yml` nie montuje już `./downloads:/data` — nie ma potrzeby
+utrzymywać tego katalogu.
 
 ## Uwagi bezpieczeństwa
 
@@ -124,7 +123,7 @@ sama go nigdzie indziej nie odczytuje.
   użyj silnych haseł. Logowanie ma prosty rate-limit (5 prób / 5 min na konto).
 - Worker akceptuje wyłącznie żądania z `WORKER_TOKEN`; port 8081 nie jest
   publikowany na hoście.
-- Limity: `MAX_CONCURRENT_JOBS`, `MAX_PLAYLIST_ITEMS`, `MAX_DURATION_SEC`
+- Limity: `MAX_CONCURRENT_STREAMS`, `MAX_PLAYLIST_ITEMS`, `MAX_DURATION_SEC`
   ograniczają nadużycia (konfiguracja w `.env`).
 - Jeśli pobieranie kończy się błędem YouTube o weryfikacji bota, ustaw
   `COOKIES_FILE` (patrz `.env.example`) — worker przekazuje ten plik do

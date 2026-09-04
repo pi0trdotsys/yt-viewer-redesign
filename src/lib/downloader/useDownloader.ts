@@ -14,12 +14,15 @@ import type { StartInput } from "./types.shared";
  * Persystencja (§10): kolejka w `localStorage`, klucz per-użytkownik
  * (`ytdl.queue.v1.<userId>`) — inaczej po zalogowaniu innym kontem w tej
  * samej przeglądarce widać historię/kolejkę poprzedniego usera. Odczyt
- * wyłącznie w `useEffect` (hydration-safe), walidacja zodem (niezgodne
- * rekordy odrzucane), limit 100 rekordów historii.
+ * wyłącznie w `useEffect` (hydration-safe), walidacja w `engine.importDtos`
+ * (niezgodne rekordy odrzucane), limit 100 rekordów historii.
+ *
+ * Model strumieniowy nie ma serwerowej kolejki do zsynchronizowania — po
+ * restarcie karty historia to wyłącznie to, co przetrwało w localStorage
+ * (bilety są jednorazowe i krótkotrwałe, nie da się ich "doczytać" z workera).
  */
 
 const LEGACY_SHARED_KEY = "ytdl.queue.v1";
-const HISTORY_LIMIT = 100;
 
 function storageKey(userId: string): string {
   return `${LEGACY_SHARED_KEY}.${userId}`;
@@ -38,8 +41,7 @@ function loadPersisted(engine: HttpDownloaderEngine, userId: string): void {
 
 function persist(engine: HttpDownloaderEngine, userId: string): void {
   try {
-    const dtos = engine.exportDtos().slice(-HISTORY_LIMIT);
-    window.localStorage.setItem(storageKey(userId), JSON.stringify(dtos));
+    window.localStorage.setItem(storageKey(userId), JSON.stringify(engine.exportDtos()));
   } catch {
     // brak miejsca / tryb prywatny — persystencja jest best-effort
   }
@@ -52,7 +54,7 @@ export function useDownloader() {
   const userIdRef = useRef<string | null>(null);
 
   // Hydration-safe: najpierw kim jesteśmy (klucz localStorage per-user),
-  // dopiero potem odczyt persystencji + synchronizacja z serwerem (§10).
+  // dopiero potem odczyt persystencji (§10).
   useEffect(() => {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
@@ -71,11 +73,8 @@ export function useDownloader() {
         userIdRef.current = data.user?.id ?? null;
         if (userIdRef.current) loadPersisted(engine, userIdRef.current);
         setJobs(engine.snapshot());
-        void engine.syncFromServer();
       })
-      .catch(() => {
-        void engine.syncFromServer();
-      });
+      .catch(() => undefined);
   }, [engine]);
 
   // Subskrypcja emisji silnika + persystencja po każdej zmianie.
@@ -134,10 +133,5 @@ export function useDownloader() {
     if (userIdRef.current) persist(engine, userIdRef.current);
   }, [engine]);
 
-  const getDownloadUrl = useCallback(
-    (jobId: string): string | null => engine.getDownloadUrl(jobId),
-    [engine],
-  );
-
-  return { jobs, start, cancel, retry, clearFinished, getDownloadUrl };
+  return { jobs, start, cancel, retry, clearFinished };
 }

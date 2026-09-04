@@ -1,9 +1,10 @@
 import { z } from "zod";
 
 /**
- * Wspólne DTO klient/serwer (kontrakt: docs/CLAUDE_CONTRACT.md §3).
- * Źródłem prawdy dla UI pozostaje `src/components/downloader/types.ts` —
- * ten moduł opisuje wyłącznie transport sieciowy.
+ * Wspólne DTO klient/serwer dla modelu strumieniowego (worker `/streams`,
+ * patrz `worker/src/streams.ts`). Źródłem prawdy dla UI pozostaje
+ * `src/components/downloader/types.ts` — ten moduł opisuje wyłącznie
+ * transport sieciowy.
  */
 
 export const MEDIA_FORMATS = ["mp3", "mp4"] as const;
@@ -32,44 +33,39 @@ export const startInputSchema = z.object({
 });
 export type StartInput = z.infer<typeof startInputSchema>;
 
-export const jobStatusSchema = z.enum([
-  "idle",
-  "resolving",
-  "downloading",
-  "converting",
-  "done",
-  "error",
-  "canceled",
-]);
+export const streamStatusSchema = z.enum(["resolving", "downloading", "done", "error", "canceled"]);
+export type StreamStatusDto = z.infer<typeof streamStatusSchema>;
 
 /**
- * Job w transporcie. Nadbiory względem `DownloadJob`:
- * - `errorCode`  — maszynowy kod błędu (komunikat PL mapuje klient),
- * - `streamToken`— token HMAC joba do SSE/pobrania pliku (sekretny, serwer),
- * - `hasFile`    — czy istnieje pobralny plik (status done).
+ * Bilet strumienia w transporcie — odpowiednik `StreamDto` z workera. Bez
+ * `outputPath`/`hasFile` (nie ma pliku na serwerze) — pobieranie leci wprost
+ * do przeglądarki, jednorazowym linkiem `token`.
  */
-export const jobDtoSchema = z.object({
+export const streamDtoSchema = z.object({
   id: z.string().min(1),
-  url: z.string().max(2048),
-  title: z.string().max(512).optional(),
-  thumbnailUrl: z.string().url().optional(),
-  durationSec: z.number().nonnegative().optional(),
-  format: z.enum(MEDIA_FORMATS),
-  quality: z.string().max(16),
-  status: jobStatusSchema,
+  status: streamStatusSchema,
   progress: z.number().min(0).max(100),
+  title: z.string().max(512).optional(),
+  durationSec: z.number().nonnegative().optional(),
+  thumbnailUrl: z.string().url().optional(),
   speedBytesPerSec: z.number().nonnegative().optional(),
   etaSec: z.number().nonnegative().optional(),
   downloadedBytes: z.number().nonnegative().optional(),
   totalBytes: z.number().nonnegative().optional(),
-  outputPath: z.string().max(1024).optional(),
   error: z.string().max(512).optional(),
   errorCode: z.enum(JOB_ERROR_CODES).optional(),
-  streamToken: z.string().max(128).optional(),
-  hasFile: z.boolean().optional(),
 });
-export type JobDto = z.infer<typeof jobDtoSchema>;
+export type StreamDto = z.infer<typeof streamDtoSchema>;
 
-export const jobListDtoSchema = z.object({
-  jobs: z.array(jobDtoSchema),
-});
+/** Odpowiedź `POST /api/public/streams` — pojedyncze wideo (bilet + token
+ *  jednorazowego pobrania) albo playlista (lista URL-i do rozwinięcia po
+ *  stronie klienta, patrz `engine.ts`). */
+export const createStreamResponseSchema = z.discriminatedUnion("kind", [
+  streamDtoSchema.extend({ kind: z.literal("video"), token: z.string().min(1) }),
+  z.object({
+    kind: z.literal("playlist"),
+    title: z.string().max(512).optional(),
+    entries: z.array(z.string().url()),
+  }),
+]);
+export type CreateStreamResponse = z.infer<typeof createStreamResponseSchema>;

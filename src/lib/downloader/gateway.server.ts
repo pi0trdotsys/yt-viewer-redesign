@@ -9,11 +9,11 @@ import { getSessionUser } from "../auth/session.server";
  * - czyta env wyłącznie wewnątrz funkcji (kontrakt §2),
  * - nie modyfikuje body/strumieni — SSE i pliki przepływają strumieniowo,
  * - autoryzacja żądań: sesja logowania (ciasteczko, `getSessionUser`) —
- *   sprawdzana tu, żeby działać identycznie w dev i produkcji. Token joba
- *   (`streamToken`) dodatkowo weryfikuje worker na endpointach /events i /files.
+ *   sprawdzana tu, żeby działać identycznie w dev i produkcji. Token biletu
+ *   dodatkowo weryfikuje worker na endpointach /events i /streams/:id.
  * - izolacja per-user: id zalogowanego usera przekazywany do workera w
- *   nagłówku X-User-Id — worker filtruje nim listę/anulowanie/retry jobów,
- *   żeby jeden użytkownik nie widział ani nie sterował zadaniami drugiego.
+ *   nagłówku X-User-Id — worker filtruje nim bilety/anulowanie, żeby jeden
+ *   użytkownik nie widział ani nie sterował transferami drugiego.
  */
 
 const PUBLIC_PREFIX = "/api/public/";
@@ -24,7 +24,7 @@ function workerBaseUrl(): string {
 
 function workerPath(request: Request): string {
   const url = new URL(request.url);
-  // /api/public/jobs/... → /jobs/... (zachowuje query, np. ?token=...)
+  // /api/public/streams/... → /streams/... (zachowuje query, np. ?token=...)
   return url.pathname.slice(PUBLIC_PREFIX.length - 1) + url.search;
 }
 
@@ -44,7 +44,11 @@ async function forwardToWorker(
   if (contentType) headers.set("content-type", contentType);
 
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
-  const init: RequestInit = { method: request.method, headers };
+  // Przekazujemy `signal` klienta dalej do workera: gdy przeglądarka
+  // przerywa pobieranie (zamknięcie karty, `AbortController`), fetch do
+  // workera też się urywa — bez tego serwerowy proces yt-dlp/ffmpeg
+  // pracowałby dalej w tle mimo braku odbiorcy.
+  const init: RequestInit = { method: request.method, headers, signal: request.signal };
   if (hasBody) {
     const raw = await request.text();
     if (raw.length > 64 * 1024) {

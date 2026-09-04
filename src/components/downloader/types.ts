@@ -1,7 +1,14 @@
 export type MediaFormat = "mp3" | "mp4";
 
+/**
+ * `idle`   — sentinel wyłącznie UI (brak jakiegokolwiek zadania) —
+ *            nigdy nie jest przypisywany realnemu zadaniu.
+ * `queued` — pozycja playlisty czeka w kolejce klienta na swoją kolej
+ *            (bilet jeszcze nie utworzony na workerze — patrz engine.ts).
+ * Pozostałe statusy odzwierciedlają 1:1 `StreamStatusDto` z workera.
+ */
 export type JobStatus =
-  "idle" | "resolving" | "downloading" | "converting" | "done" | "error" | "canceled";
+  "idle" | "queued" | "resolving" | "downloading" | "done" | "error" | "canceled";
 
 export interface DownloadJob {
   id: string;
@@ -18,7 +25,6 @@ export interface DownloadJob {
   etaSec?: number | undefined;
   downloadedBytes?: number | undefined;
   totalBytes?: number | undefined;
-  outputPath?: string | undefined;
   error?: string | undefined;
 }
 
@@ -36,10 +42,10 @@ export const DEFAULT_QUALITY: Record<MediaFormat, string> = {
 
 export const STATUS_LABEL: Record<JobStatus, string> = {
   idle: "Oczekuje",
+  queued: "W kolejce",
   resolving: "Analiza",
   downloading: "Pobieranie",
-  converting: "Konwersja",
-  done: "Gotowe",
+  done: "Pobrano",
   error: "Błąd",
   canceled: "Anulowano",
 };

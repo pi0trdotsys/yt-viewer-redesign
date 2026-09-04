@@ -25,9 +25,10 @@ COPY package.json tsconfig.json ./
 COPY src ./src
 
 ENV NODE_ENV=production \
-    PORT=8081 \
-    DOWNLOAD_DIR=/data
+    PORT=8081
 
+# /data istnieje wyłącznie pod opcjonalny cookies.txt (COOKIES_FILE) — pliki
+# wynikowe nigdy nie trafiają na dysk, strumień leci prosto do przeglądarki.
 RUN mkdir -p /data
 VOLUME /data
 
