@@ -281,16 +281,33 @@ Fonty ładowane `<link>` w `src/routes/__root.tsx` — **nigdy** `@import` zdaln
 
 ---
 
-## 13. Testy (do napisania)
+## 13. Testy
 
-| Zakres         | Plik                                      | Minimum                                                                        |
-| -------------- | ----------------------------------------- | ------------------------------------------------------------------------------ |
-| Formatery      | `src/components/downloader/types.test.ts` | `formatBytes(0/1023/1024/1.5GB)`, `formatEta(0/59/60/3599)`, `undefined → "—"` |
-| Parser URL     | `src/lib/downloader/validate.test.ts`     | wszystkie wzorce z §6 + 10 przypadków negatywnych                              |
-| Maszyna stanów | `src/lib/downloader/engine.test.ts`       | brak przejść z terminalnych, idempotentny `cancel`                             |
-| Throttling     | `engine.test.ts`                          | ≤4 emisje/s, natychmiastowa emisja przy zmianie statusu                        |
+Zaimplementowane (model strumieniowy + konta, nie stary `engine`/`jobs`
+opisany niżej w historycznym §14 — ten dokument pochodzi sprzed przepisania
+na streaming, patrz `.claude/plans/dynamic-soaring-fox.md`):
 
-Uruchamianie: `bunx vitest run`. Lint: `bun run lint`. Typy: `tsgo`.
+| Zakres                        | Plik                                                | Runner |
+| ----------------------------- | ---------------------------------------------------- | ------ |
+| Parser URL                    | `src/lib/downloader/validate.test.ts`                | vitest |
+| Formatery                     | `src/components/downloader/types.test.ts`            | vitest |
+| Krypto (sha256/hmac)          | `src/lib/auth/crypto.server.test.ts`                 | vitest |
+| Hasła (pbkdf2 + legacy sha256)| `src/lib/auth/password.server.test.ts`               | vitest |
+| Sesja (round-trip/expiry/tamper) | `src/lib/auth/session.server.test.ts`             | vitest |
+| Rate-limit logowania          | `src/lib/auth/rate-limit.server.test.ts`             | vitest |
+| Avatar/inicjały/akcent        | `src/lib/auth/avatar.test.ts`                        | vitest |
+| Magazyn kont (bootstrap/CRUD/ostatni admin/rehash) | `src/lib/auth/users.store.server.test.ts` | vitest |
+| Gateway /api/auth/*           | `src/lib/auth/gateway.server.test.ts`                | vitest |
+| Gateway /api/admin/*          | `src/lib/auth/admin.gateway.server.test.ts`          | vitest |
+| Gateway /api/public/*         | `src/lib/downloader/gateway.server.test.ts`          | vitest |
+| Komponent `QueueList`         | `src/components/downloader/QueueList.test.tsx`       | vitest (jsdom) |
+| Bilety SSE/bearer (worker)    | `worker/src/tokens.test.ts`                          | bun test |
+| Progres/klasyfikacja błędów/shQuote (worker) | `worker/src/ytdlp.test.ts`            | bun test |
+| Integracja `createHandler` z atrapami yt-dlp/ffmpeg | `worker/src/app.test.ts`      | bun test |
+
+Uruchamianie: `bun run test` (root — odpala oba runnery), albo osobno
+`bun run test:app` / `bun run test:worker`. Lint: `bun run lint`. Typy:
+`npx tsc --noEmit` (root i `worker/`).
 
 ---
 

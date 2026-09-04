@@ -70,8 +70,8 @@ export function clearSessionCookieHeader(): string {
 
 /**
  * Weryfikuje ciasteczko sesji z żądania: podpis HMAC w czasie stałym,
- * termin ważności, oraz że user nadal istnieje w konfiguracji env (na
- * wypadek gdyby admin usunął/zmienił konto po wydaniu ciasteczka).
+ * termin ważności, oraz że user nadal istnieje w magazynie kont (na
+ * wypadek gdyby admin usunął konto po wydaniu ciasteczka).
  */
 export async function getSessionUser(request: Request): Promise<SessionUser | null> {
   const secret = sessionSecret();
