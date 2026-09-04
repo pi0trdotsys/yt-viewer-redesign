@@ -38,12 +38,15 @@ export function UrlField({
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-2">
-        <label htmlFor="yt-url" className="label-mono truncate">
+      {/* Na wąskim ekranie etykieta i podpowiedź walczyły o ten sam wiersz
+          (podpowiedź jako shrink-0 wypychała etykietę do ucięcia elipsą) —
+          od sm: wracają na jeden wiersz, bo wtedy obie się mieszczą. */}
+      <div className="flex flex-col gap-1 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-baseline sm:gap-2">
+        <label htmlFor="yt-url" className="label-mono sm:truncate">
           Wklej link z YouTube
         </label>
         {hint ? (
-          <span className="shrink-0 truncate font-mono text-[10px] tracking-[0.16em] text-muted-foreground/70 sm:text-[11px]">
+          <span className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground/70 sm:shrink-0 sm:truncate sm:text-[11px]">
             {hint}
           </span>
         ) : null}

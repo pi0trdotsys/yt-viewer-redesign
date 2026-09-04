@@ -87,10 +87,22 @@ function Login() {
   };
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-background">
+    <main className="relative min-h-dvh overflow-hidden bg-background">
       <div aria-hidden className="grid-field pointer-events-none absolute inset-0 opacity-40" />
-      <div className="halo relative mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-4 py-12 sm:px-6">
-        <header className="mb-10 flex items-center justify-center gap-3">
+      {/* Na telefonie treść zaczyna się blisko góry (z odstępem pod notch/
+          pasek statusu) zamiast wisieć w pustce na środku ekranu — od sm:
+          wraca klasyczne centrowanie, które ma sens dopiero przy większej
+          wysokości viewportu. min-h-dvh (nie min-h-screen) liczy się od
+          realnej widocznej wysokości na mobile, więc otwarcie klawiatury
+          przy polu hasła nie odcina dołu karty. */}
+      <div
+        className="halo relative mx-auto flex min-h-dvh w-full max-w-md flex-col justify-start px-4 sm:justify-center sm:px-6 sm:py-12"
+        style={{
+          paddingTop: "max(2.75rem, calc(env(safe-area-inset-top) + 1.25rem))",
+          paddingBottom: "max(3rem, calc(env(safe-area-inset-bottom) + 1.5rem))",
+        }}
+      >
+        <header className="mb-8 flex items-center justify-center gap-3 sm:mb-10">
           <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-primary/40 bg-primary/10 font-mono text-[11px] tracking-tight text-primary">
             YT
           </span>
