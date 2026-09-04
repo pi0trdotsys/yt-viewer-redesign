@@ -86,6 +86,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
+      // "Dodaj do ekranu głównego": bez tych dwóch iOS/Android nie mają
+      // skąd wziąć ostrej ikony — iOS bez apple-touch-icon robi zamiast
+      // niej zrzut ekranu strony (rozmyty, nie jest to w ogóle ikona), a
+      // Android bez manifestu skaluje w górę favicon.ico (16-32px źródło
+      // → widoczna pikselizacja na kafelku 192px+). Oba linkowane niżej.
+      { name: "theme-color", content: "#0a0a0a" },
+      { name: "apple-mobile-web-app-title", content: "Downloader" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
     ],
     links: [
       {
@@ -100,6 +109,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "icon", href: "/favicon.ico", sizes: "any" },
+      // Pełnokadrowy, nieprzezroczysty PNG (bez wypalonych zaokrągleń) —
+      // iOS sam dokleja swój squircle, więc gotowe zaokrąglenie w źródle
+      // dawałoby podwójne/niespójne krawędzie.
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
     ],
   }),
   shellComponent: RootShell,

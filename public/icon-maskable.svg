@@ -1,0 +1,12 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Wariant "maskable" pod Android adaptive icons / apple-touch-icon: tło
+       pełnokadrowe (bez zaokrągleń/obwódki wypalonych w SVG) — system sam
+       przycina kształt (koło/squircle), więc każde dorysowane zaokrąglenie
+       tylko psułoby krawędzie. Logo w tych samych proporcjach co
+       favicon.svg, mieści się w bezpiecznej strefie 80% (Android) i w
+       spokojnym marginesie na własne zaokrąglenie iOS. -->
+  <rect width="64" height="64" fill="#0a0a0a" />
+  <path d="M32 15 V37" fill="none" stroke="#ff0000" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M21 28 L32 39 L43 28" fill="none" stroke="#ff0000" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M19 48 H45" fill="none" stroke="#ff0000" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
