@@ -198,11 +198,23 @@ export function attachLineReader(
 /**
  * Uruchamia proces (yt-dlp) i strumieniowo raportuje linie z obu strumieni —
  * do wywołań, gdzie żaden ze strumieni nie niesie danych binarnych (probe,
- * oraz pobieranie do pliku/FIFO przez `-o <path>`, gdzie tekst postępu leci
- * normalnym stdout/stderr yt-dlp).
+ * oraz `spawnYtdlToFifo` poniżej, gdzie tekst postępu leci normalnym
+ * stdout/stderr powłoki `sh -c`).
+ *
+ * `opts.detached`: proces dostaje własną grupę procesów (`setsid`), a
+ * `kill()` sygnalizuje całą grupę (`kill(-pid)`), nie tylko `bin` samo —
+ * potrzebne dla `spawnYtdlToFifo`, gdzie `bin` to `sh` uruchamiające
+ * potok `yt-dlp | cat`: `sh -c "cmd1 | cmd2"` nie robi `exec` (czeka na
+ * oba procesy potomne), więc zwykły SIGTERM do samego `sh` zostawiłby
+ * yt-dlp/cat jako osierocone procesy.
  */
-export function spawnLineProcess(bin: string, args: string[]): SpawnedProcess {
-  const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
+export function spawnLineProcess(
+  bin: string,
+  args: string[],
+  opts?: { detached?: boolean },
+): SpawnedProcess {
+  const detached = opts?.detached ?? false;
+  const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"], detached });
   let stderrTail = "";
   let exitCode: number | null = null;
   let exitResolve: ((code: number) => void) | undefined;
@@ -230,12 +242,28 @@ export function spawnLineProcess(bin: string, args: string[]): SpawnedProcess {
     exitResolve?.(exitCode);
   });
 
+  const signalGroup = (signal: NodeJS.Signals) => {
+    if (detached && child.pid) {
+      try {
+        process.kill(-child.pid, signal);
+        return;
+      } catch {
+        // grupa mogła już nie istnieć — spróbuj samego procesu niżej
+      }
+    }
+    try {
+      child.kill(signal);
+    } catch {
+      // proces mógł już zakończyć działanie
+    }
+  };
+
   return {
     kill() {
       if (exitCode !== null) return;
-      child.kill("SIGTERM");
+      signalGroup("SIGTERM");
       setTimeout(() => {
-        if (exitCode === null) child.kill("SIGKILL");
+        if (exitCode === null) signalGroup("SIGKILL");
       }, 5000).unref();
     },
     get exited() {
@@ -248,6 +276,54 @@ export function spawnLineProcess(bin: string, args: string[]): SpawnedProcess {
       return stderrTail;
     },
   };
+}
+
+/** Cytowanie POSIX sh (pojedyncze cudzysłowy, `'` → `'\''`) — bezpieczne dla
+ *  dowolnego tekstu jako pojedynczy argument powłoki, w tym URL-a od usera. */
+export function shQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Kluczowy element strumieniowania bez zapisu na dysk: yt-dlp pisze na
+ * WŁASNE stdout (`-o -`), które leci przez POWŁOKOWY `|` (pipe(2) w
+ * jądrze) do `cat`, a dopiero `cat` pisze do `fifoPath`. To NIE jest to
+ * samo, co `yt-dlp -o <fifoPath>` bezpośrednio — a różnica jest krytyczna:
+ *
+ * Zweryfikowane empirycznie (powtarzalne na realnych filmach): gdy yt-dlp
+ * dostaje FIFO jako `-o <path>`, jego WŁASNA logika otwierania plików
+ * (`sanitize_open`/`locked_file` w yt-dlp) ściga się z ffmpeg otwierającym
+ * ten sam FIFO do odczytu. W praktyce (obserwowane: `open()` yt-dlp blokuje
+ * się w oczekiwaniu na czytelnika, podczas gdy ffmpeg, który zdążył otworzyć
+ * FIFO wcześniej — zanim yt-dlp w ogóle doszedł do zapisu, bo najpierw robi
+ * ekstrakcję strony/JS-challenge, co trwa sekundy — dostaje puste/przedwczesne
+ * EOF i kończy się błędem "Invalid data found when processing input", co z
+ * kolei ubija zapis yt-dlp przez `BrokenPipeError`. Dotyczy to RÓWNIEŻ
+ * pojedynczego FIFO (mp3), nie tylko dwóch (mp4) — pierwotna "weryfikacja"
+ * że wariant mp3 działa była niepełna (testowana na jednym konkretnym,
+ * nietypowym filmie).
+ *
+ * `cat`, jako trywialny program, po prostu blokuje się w `open()` do
+ * pojawienia się czytelnika (dokładnie zweryfikowany, powtarzalny wzorzec:
+ * 3/3 udane przebiegi zarówno dla pojedynczego FIFO, jak i dla dwóch FIFO
+ * czytanych jednocześnie przez jeden proces ffmpeg) — nie ma wewnętrznej
+ * logiki plikowej, która mogłaby się z kimkolwiek ścigać.
+ *
+ * `|` jest tu powłokowy, NIE Node `.pipe()` między dwoma procesami
+ * potomnymi (patrz duży komentarz w `streams.ts` przy `spawnAudioPipeline`
+ * — Node jako pośrednik między stdio dwóch procesów potomnych potrafi cicho
+ * gubić dane na tym hoście). Node nigdy nie dotyka bajtów audio/wideo w
+ * żadnym z tych dwóch etapów.
+ */
+export function spawnYtdlToFifo(
+  bin: string,
+  args: string[],
+  url: string,
+  fifoPath: string,
+): SpawnedProcess {
+  const cmd =
+    [bin, ...args, "-o", "-", "--", url].map(shQuote).join(" ") + " | cat > " + shQuote(fifoPath);
+  return spawnLineProcess("sh", ["-c", cmd], { detached: true });
 }
 
 function asString(value: unknown): string | undefined {

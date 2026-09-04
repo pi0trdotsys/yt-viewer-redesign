@@ -13,7 +13,7 @@ import {
   parseProgressLine,
   probe,
   progressArgs,
-  spawnLineProcess,
+  spawnYtdlToFifo,
   ytdlBin,
   type JobErrorCode,
   type ProgressUpdate,
@@ -253,21 +253,19 @@ export class StreamRegistry {
     return this.streamFromFfmpeg(ticket, ffmpeg);
   }
 
-  /** mp3: yt-dlp (bestaudio, -o -) → pipe stdin → ffmpeg (transkodowanie, -o pipe:1). */
   /**
-   * mp3: yt-dlp pisze bestaudio do FIFO (`-o <fifo>`, zwykły zapis do pliku —
-   * blokujące I/O, bez udziału Node), ffmpeg czyta ten sam FIFO jako swój
-   * argument `-i` i transkoduje na stdout.
+   * mp3: yt-dlp pisze bestaudio na stdout, powłokowy `|` leje to do `cat`,
+   * `cat` pisze do FIFO (`spawnYtdlToFifo`, patrz obszerny komentarz w
+   * ytdlp.ts po co ten pośredni `cat` — bezpośrednie `yt-dlp -o <fifo>`
+   * gubi dane/zwraca "Invalid data found" w wyścigu z ffmpeg). ffmpeg
+   * czyta ten sam FIFO jako swój argument `-i` i transkoduje na stdout.
    *
-   * Zweryfikowane empirycznie, że to jedyny niezawodny wariant: pierwotna
-   * wersja robiła `yt.stdout.pipe(ffmpeg.stdin)` (Node jako pośrednik między
-   * dwoma potomnymi procesami) i **cicho gubiła dane w połowie transferu** —
-   * yt-dlp kończył z kompletem bajtów (potwierdzone licznikiem), ale do
-   * ffmpeg.stdin docierała tylko część, bez żadnego błędu na żadnej ze stron.
-   * FIFO czytane przez proces zewnętrzny (ffmpeg, tak jak wcześniej `cat` w
-   * izolowanym teście) nie wykazuje tego problemu — Node nigdy nie dotyka
-   * bajtów źródłowego audio, tylko nadzoruje procesy i czyta już-gotowy mp3
-   * ze stdout ffmpeg (dokładnie ten sam, sprawdzony wzorzec co w wideo).
+   * Historia: pierwotna wersja robiła `yt.stdout.pipe(ffmpeg.stdin)` (Node
+   * jako pośrednik między dwoma potomnymi procesami) i cicho gubiła dane w
+   * połowie transferu — yt-dlp kończył z kompletem bajtów, ale do
+   * ffmpeg.stdin docierała tylko część, bez żadnego błędu po żadnej ze
+   * stron. Node nigdy nie dotyka bajtów źródłowego audio w obecnej wersji —
+   * tylko nadzoruje procesy i czyta już-gotowy mp3 ze stdout ffmpeg.
    */
   private async spawnAudioPipeline(ticket: InternalTicket): Promise<ChildProcess> {
     const bitrate = ticket.input.quality.replace(/[^0-9]/g, "") || "320";
@@ -276,17 +274,12 @@ export class StreamRegistry {
     const audioFifo = join(tmpDir, "audio.fifo");
     await execFileAsync("mkfifo", [audioFifo]);
 
-    const ytProc = spawnLineProcess(ytdlBin(), [
-      "--no-playlist",
-      ...progressArgs(),
-      ...cookieArgs(),
-      "-f",
-      "bestaudio",
-      "-o",
-      audioFifo,
-      "--",
+    const ytProc = spawnYtdlToFifo(
+      ytdlBin(),
+      ["--no-playlist", ...progressArgs(), ...cookieArgs(), "-f", "bestaudio"],
       ticket.input.url,
-    ]);
+      audioFifo,
+    );
     ytProc.onLine((line) => {
       const p = parseProgressLine(line);
       if (p) this.reportProgress(ticket, p);
@@ -316,8 +309,8 @@ export class StreamRegistry {
 
   /**
    * mp4: dwa `mkfifo` (video/audio) w katalogu tymczasowym, dwa równoległe
-   * `yt-dlp -o <fifo>` (piszą tam jak do zwykłego pliku — OS blokuje zapis,
-   * aż ffmpeg otworzy drugi koniec, czyli klasyczna semantyka FIFO), plus
+   * `yt-dlp -o - | cat > fifo` (`spawnYtdlToFifo` — patrz komentarz w
+   * ytdlp.ts po co pośredni `cat`, zamiast `yt-dlp -o <fifo>` wprost), plus
    * własny `ffmpeg -c copy` mux do fragmented mp4 na stdout. Zweryfikowane
    * ręcznie: `--merge-output-format mp4` samego yt-dlp przy `-o -` po cichu
    * podmienia kontener na mpegts — to podejście daje realny, poprawnie
@@ -332,28 +325,18 @@ export class StreamRegistry {
     await execFileAsync("mkfifo", [videoFifo]);
     await execFileAsync("mkfifo", [audioFifo]);
 
-    const videoProc = spawnLineProcess(ytdlBin(), [
-      "--no-playlist",
-      ...progressArgs(),
-      ...cookieArgs(),
-      "-f",
-      `bv*[height<=${height}]`,
-      "-o",
+    const videoProc = spawnYtdlToFifo(
+      ytdlBin(),
+      ["--no-playlist", ...progressArgs(), ...cookieArgs(), "-f", `bv*[height<=${height}]`],
+      ticket.input.url,
       videoFifo,
-      "--",
+    );
+    const audioProc = spawnYtdlToFifo(
+      ytdlBin(),
+      ["--no-playlist", ...progressArgs(), ...cookieArgs(), "-f", "ba"],
       ticket.input.url,
-    ]);
-    const audioProc = spawnLineProcess(ytdlBin(), [
-      "--no-playlist",
-      ...progressArgs(),
-      ...cookieArgs(),
-      "-f",
-      "ba",
-      "-o",
       audioFifo,
-      "--",
-      ticket.input.url,
-    ]);
+    );
     ticket.processes.push(videoProc, audioProc);
 
     const progress: { video: ProgressUpdate; audio: ProgressUpdate } = { video: {}, audio: {} };
@@ -373,13 +356,16 @@ export class StreamRegistry {
     });
 
     // UWAGA: nie da się tu czekać, aż yt-dlp "zacznie pisać" przed
-    // odpaleniem ffmpeg — to byłby zakleszczenie. `-o <fifo>` blokuje yt-dlp
-    // w open() dopóki ktoś nie otworzy FIFO do czytania; żadna linia postępu
-    // nie może się pojawić, zanim ffmpeg (czytelnik) w ogóle wystartuje.
-    // Realny problem (ffmpeg sporadycznie dostawał "Invalid data found" na
-    // DRUGIM z dwóch wejść) to znany efekt czytania z pipe'ów bez
-    // wystarczającego bufora na czas analizy pierwszego wejścia —
-    // `-thread_queue_size` dla każdego `-i` to standardowy fix z wiki ffmpeg.
+    // odpaleniem ffmpeg — to byłby zakleszczenie. `cat` (pisarz FIFO, patrz
+    // spawnYtdlToFifo) blokuje się w open() dopóki ffmpeg nie otworzy FIFO
+    // do czytania jako pierwszy; żadna linia postępu nie pojawi się, zanim
+    // ffmpeg w ogóle wystartuje.
+    // `-thread_queue_size` dla każdego `-i` to standardowy, tani bufor na
+    // czas analizy pierwszego wejścia — zostawiony jako dodatkowy zapas,
+    // choć rzeczywisty root cause sporadycznego "Invalid data found" był
+    // gdzie indziej (patrz obszerny komentarz przy `spawnYtdlToFifo` w
+    // ytdlp.ts: wewnętrzna logika otwierania plików w samym yt-dlp ścigała
+    // się z otwarciem FIFO przez ffmpeg).
     const ffmpeg = spawn(
       ffmpegBin(),
       [
