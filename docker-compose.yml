@@ -24,9 +24,19 @@ services:
       AUTH_AVATAR_3: ${AUTH_AVATAR_3:-}
       AUTH_ACCENT_3: ${AUTH_ACCENT_3:-}
       SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      # Magazyn kont (panel admina) — plik JSON na wolumenie ./data, zamiast
+      # samych zmiennych AUTH_*. AUTH_USER_1..3 powyżej służą już tylko do
+      # JEDNORAZOWEGO bootstrapu przy pierwszym starcie (brak users.json) —
+      # potem edycje idą przez panel /admin i żyją w pliku, nie w .env.
+      USERS_FILE: /data/users.json
+      # Login konta, które ma dostać rolę admina przy bootstrapie (domyślnie
+      # AUTH_USER_1, jeśli nie ustawione).
+      ADMIN_USER: ${ADMIN_USER:-}
       # Gateway → worker
       WORKER_URL: http://worker:8081
       WORKER_TOKEN: ${WORKER_TOKEN:?set WORKER_TOKEN in .env}
+    volumes:
+      - ./data:/data
     depends_on:
       worker:
         condition: service_healthy

@@ -1,4 +1,10 @@
-import { QUALITY_OPTIONS, StreamRegistry, httpError, type StartInput, type StreamDto } from "./streams";
+import {
+  QUALITY_OPTIONS,
+  StreamRegistry,
+  httpError,
+  type StartInput,
+  type StreamDto,
+} from "./streams";
 import { verifyBearer, verifyTicketToken } from "./tokens";
 
 /**

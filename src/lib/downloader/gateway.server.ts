@@ -78,7 +78,7 @@ export async function handleDownloaderApi(request: Request): Promise<Response | 
 
   if (!pathname.startsWith(PUBLIC_PREFIX)) return null;
 
-  const user = getSessionUser(request);
+  const user = await getSessionUser(request);
   if (user === null) {
     return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }

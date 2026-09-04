@@ -520,7 +520,8 @@ export class StreamRegistry {
     ticket: InternalTicket,
     progress: { video: ProgressUpdate; audio: ProgressUpdate },
   ): void {
-    const downloaded = (progress.video.downloadedBytes ?? 0) + (progress.audio.downloadedBytes ?? 0);
+    const downloaded =
+      (progress.video.downloadedBytes ?? 0) + (progress.audio.downloadedBytes ?? 0);
     const total = (progress.video.totalBytes ?? 0) + (progress.audio.totalBytes ?? 0);
     const speed = (progress.video.speedBytesPerSec ?? 0) + (progress.audio.speedBytesPerSec ?? 0);
     const eta = Math.max(progress.video.etaSec ?? 0, progress.audio.etaSec ?? 0);
@@ -567,7 +568,9 @@ export class StreamRegistry {
   private finish(ticket: InternalTicket, dto: StreamDto): void {
     ticket.dto = dto;
     if (dto.status === "error") {
-      console.error(`[worker] stream ${dto.id} failed (${dto.errorCode ?? "UNKNOWN"}): ${dto.error ?? ""}`);
+      console.error(
+        `[worker] stream ${dto.id} failed (${dto.errorCode ?? "UNKNOWN"}): ${dto.error ?? ""}`,
+      );
     }
     this.emit(ticket, dto, true);
   }

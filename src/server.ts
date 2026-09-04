@@ -4,8 +4,9 @@ import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { handleDownloaderApi } from "./lib/downloader/gateway.server";
 import { handleAuthApi } from "./lib/auth/gateway.server";
+import { handleAdminApi } from "./lib/auth/admin.gateway.server";
 import { guardPageRequest } from "./lib/auth/guard.server";
-import { authConfigured } from "./lib/auth/users.server";
+import { authConfigured } from "./lib/auth/users.store.server";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -61,7 +62,7 @@ export default {
       // Fail-closed in production if nobody configured the three accounts
       // (AUTH_USER_1..3 / AUTH_PASSWORD_SHA256_1..3). In development an
       // unconfigured auth stays open so `vite dev` works out of the box.
-      if (process.env["NODE_ENV"] === "production" && !authConfigured()) {
+      if (process.env["NODE_ENV"] === "production" && !(await authConfigured())) {
         console.error(
           "Brak skonfigurowanych użytkowników (AUTH_USER_1..3 / AUTH_PASSWORD_SHA256_1..3) — odmawiam żądań.",
         );
@@ -72,13 +73,18 @@ export default {
       const authResponse = await handleAuthApi(request);
       if (authResponse) return authResponse;
 
+      // Panel admina: /api/admin/* (rola admina sprawdzana wewnątrz).
+      const adminResponse = await handleAdminApi(request);
+      if (adminResponse) return adminResponse;
+
       // Downloader gateway: /api/public/* proxied to the yt-dlp worker
       // (chronione sesją logowania wewnątrz handleDownloaderApi).
       const apiResponse = await handleDownloaderApi(request);
       if (apiResponse) return apiResponse;
 
-      // Ochrona stron: `/` wymaga sesji, `/login` odsyła zalogowanych na `/`.
-      const guardResponse = guardPageRequest(request);
+      // Ochrona stron: `/` i `/admin` wymagają sesji, `/login` odsyła
+      // zalogowanych na `/`.
+      const guardResponse = await guardPageRequest(request);
       if (guardResponse) return guardResponse;
 
       const handler = await getServerEntry();

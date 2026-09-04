@@ -24,6 +24,10 @@ dist-ssr
 .env
 downloads/
 
+# Magazyn kont w dev (users.store.server.ts) — produkcyjny odpowiednik żyje
+# na wolumenie /data poza repo (USERS_FILE).
+.data/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -1,6 +1,6 @@
 import { hmacHex, timingSafeEqualHex } from "./crypto.server";
-import { findPublicUser } from "./users.server";
-import type { PublicUser } from "./types.shared";
+import { findSessionUser } from "./users.store.server";
+import type { SessionUser } from "./types.shared";
 
 /**
  * Sesja logowania: podpisane HMAC ciasteczko (ten sam wzorzec co
@@ -73,7 +73,7 @@ export function clearSessionCookieHeader(): string {
  * termin ważności, oraz że user nadal istnieje w konfiguracji env (na
  * wypadek gdyby admin usunął/zmienił konto po wydaniu ciasteczka).
  */
-export function getSessionUser(request: Request): PublicUser | null {
+export async function getSessionUser(request: Request): Promise<SessionUser | null> {
   const secret = sessionSecret();
   if (!secret) return null;
 
@@ -95,5 +95,5 @@ export function getSessionUser(request: Request): PublicUser | null {
   const userId = decodeUserId(encodedUserId);
   if (!userId) return null;
 
-  return findPublicUser(userId);
+  return findSessionUser(userId);
 }

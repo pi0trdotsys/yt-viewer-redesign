@@ -193,6 +193,32 @@
     0 40px 80px -60px color-mix(in oklab, var(--primary) 60%, transparent);
 }
 
+/** Pole tekstowe formularzy panelu admina — spójne z wyglądem inputu hasła
+ *  na /login (border+surface-2+focus ring), ale samodzielne (bez wrappera
+ *  z ikoną), bo formularze admina mają po kilka pól w gridzie. */
+@utility field-input {
+  width: 100%;
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  background: color-mix(in oklab, var(--surface-2) 55%, transparent);
+  padding: 0.625rem 0.875rem;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--foreground);
+  outline: none;
+  transition:
+    border-color 0.3s,
+    box-shadow 0.3s;
+  &:focus-visible {
+    border-color: color-mix(in oklab, var(--primary) 50%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 18%, transparent);
+  }
+  &::placeholder {
+    color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+  }
+}
+
 @utility hairline-top {
   background-image: linear-gradient(
     90deg,

@@ -4,14 +4,16 @@ import type { Plugin } from "vite";
 
 import { handleDownloaderApi } from "../src/lib/downloader/gateway.server";
 import { handleAuthApi } from "../src/lib/auth/gateway.server";
+import { handleAdminApi } from "../src/lib/auth/admin.gateway.server";
 import { guardPageRequest } from "../src/lib/auth/guard.server";
 
 /**
- * Dev-only middleware obsługujące gateway /api/public/*, /api/auth/* oraz
- * ochronę stron `/` i `/login` (produkcja obsługuje to samo w src/server.ts —
- * Nitro node-server entry nie jest używany pod `vite dev`). Dzięki temu cały
- * flow logowania i pobierania da się przetestować bez Dockera, o ile worker
- * (WORKER_URL) jest osiągalny.
+ * Dev-only middleware obsługujące gateway /api/public/*, /api/auth/*,
+ * /api/admin/* oraz ochronę stron `/`, `/admin` i `/login` (produkcja
+ * obsługuje to samo w src/server.ts — Nitro node-server entry nie jest
+ * używany pod `vite dev`). Dzięki temu cały flow logowania, pobierania i
+ * panelu admina da się przetestować bez Dockera, o ile worker (WORKER_URL)
+ * jest osiągalny.
  */
 export function downloaderGatewayDevPlugin(): Plugin {
   return {
@@ -22,7 +24,8 @@ export function downloaderGatewayDevPlugin(): Plugin {
         const method = req.method ?? "GET";
         const isApi = url.startsWith("/api/");
         const isGuardedPage =
-          (method === "GET" || method === "HEAD") && (url === "/" || url.startsWith("/login"));
+          (method === "GET" || method === "HEAD") &&
+          (url === "/" || url === "/admin" || url.startsWith("/login"));
 
         if (!isApi && !isGuardedPage) {
           next();
@@ -56,7 +59,7 @@ export function downloaderGatewayDevPlugin(): Plugin {
           const request = new Request(`http://${host}${url}`, init);
 
           if (isGuardedPage) {
-            const guardResponse = guardPageRequest(request);
+            const guardResponse = await guardPageRequest(request);
             if (guardResponse) {
               res.writeHead(
                 guardResponse.status,
@@ -69,7 +72,10 @@ export function downloaderGatewayDevPlugin(): Plugin {
             return;
           }
 
-          const response = (await handleAuthApi(request)) ?? (await handleDownloaderApi(request));
+          const response =
+            (await handleAuthApi(request)) ??
+            (await handleAdminApi(request)) ??
+            (await handleDownloaderApi(request));
           if (!response) {
             next();
             return;

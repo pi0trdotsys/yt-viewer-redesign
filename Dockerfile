@@ -22,6 +22,11 @@ ENV NODE_ENV=production \
     PORT=3000 \
     HOST=0.0.0.0
 
+# Magazyn kont panelu admina (USERS_FILE=/data/users.json domyślnie) —
+# jedyny trwały stan appki poza samym kodem.
+RUN mkdir -p /data
+VOLUME /data
+
 EXPOSE 3000
 
 # Nitro node-server: uruchamiamy przez bun (kompatybilny z Node API).

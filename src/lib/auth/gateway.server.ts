@@ -4,8 +4,9 @@ import {
   createSessionCookieHeader,
   getSessionUser,
 } from "./session.server";
-import { getPublicUsers, verifyCredentials } from "./users.server";
-import { loginInputSchema } from "./types.shared";
+import { changeOwnPassword, getPublicUsers, verifyCredentials } from "./users.store.server";
+import { errorMessage, errorStatus } from "./http-error";
+import { changeOwnPasswordInputSchema, loginInputSchema } from "./types.shared";
 
 /**
  * `/api/auth/*` — logowanie/wylogowanie/stan sesji. Wzorowane na
@@ -24,8 +25,8 @@ function json(data: unknown, status = 200, extraHeaders?: HeadersInit): Response
 }
 
 async function handleSession(request: Request): Promise<Response> {
-  const user = getSessionUser(request);
-  return json({ authenticated: user !== null, user, users: getPublicUsers() });
+  const user = await getSessionUser(request);
+  return json({ authenticated: user !== null, user, users: await getPublicUsers() });
 }
 
 async function handleLogin(request: Request): Promise<Response> {
@@ -53,13 +54,37 @@ async function handleLogin(request: Request): Promise<Response> {
   }
 
   clearAttempts(userId);
-  const users = getPublicUsers();
+  const users = await getPublicUsers();
   const user = users.find((u) => u.id === userId) ?? null;
   return json({ ok: true, user }, 200, { "set-cookie": createSessionCookieHeader(userId) });
 }
 
 function handleLogout(): Response {
   return json({ ok: true }, 200, { "set-cookie": clearSessionCookieHeader() });
+}
+
+/** Samoobsługowa zmiana własnego hasła (dowolne konto, nie tylko admin). */
+async function handlePasswordChange(request: Request): Promise<Response> {
+  const user = await getSessionUser(request);
+  if (!user) return json({ error: "UNAUTHORIZED" }, 401);
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "Nieprawidłowe żądanie" }, 400);
+  }
+  const parsed = changeOwnPasswordInputSchema.safeParse(body);
+  if (!parsed.success) {
+    return json({ error: parsed.error.issues[0]?.message ?? "Nieprawidłowe żądanie" }, 400);
+  }
+
+  try {
+    await changeOwnPassword(user.id, parsed.data.currentPassword, parsed.data.newPassword);
+    return json({ ok: true });
+  } catch (error) {
+    return json({ error: errorMessage(error, "Nie udało się zmienić hasła") }, errorStatus(error));
+  }
 }
 
 export async function handleAuthApi(request: Request): Promise<Response | null> {
@@ -74,6 +99,9 @@ export async function handleAuthApi(request: Request): Promise<Response | null> 
   }
   if (pathname === "/api/auth/logout" && request.method === "POST") {
     return handleLogout();
+  }
+  if (pathname === "/api/auth/password" && request.method === "PUT") {
+    return handlePasswordChange(request);
   }
   return json({ error: "Not found" }, 404);
 }
